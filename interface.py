@@ -32,10 +32,12 @@ class ChatInterface:
         # Separate storage for original and display paths
         self.original_file_path = None  # For LLM (.dcm or other)
         self.display_file_path = None  # For UI (always viewable format)
+        self.last_uploaded_filename_for_chat_display = None # To show in chat
 
     def handle_upload(self, file_path: str) -> str:
         """
         Handle new file upload and set appropriate paths.
+        It also stores the original filename for potential display in chat.
 
         Args:
             file_path (str): Path to the uploaded file
@@ -54,6 +56,7 @@ class ChatInterface:
         saved_path = self.upload_dir / f"upload_{timestamp}{suffix}"
         shutil.copy2(file_path, saved_path)  # Use file_path directly instead of source
         self.original_file_path = str(saved_path)
+        self.last_uploaded_filename_for_chat_display = source.name # Store original name
 
         # Handle DICOM conversion for display only
         if suffix == ".dcm":
@@ -80,10 +83,23 @@ class ChatInterface:
         """
         image_path = self.original_file_path or display_image
         if image_path is not None:
-            history.append({"role": "user", "content": {"path": image_path}})
-        if message is not None:
+            history.append({"role": "user", "content": {"path": image_path}}) # For agent to get path
+
+        # Display "Uploaded: filename" in chat if a new file was just handled by handle_upload
+        if self.last_uploaded_filename_for_chat_display:
+            history.append({
+                "role": "user",
+                "content": f"(System notification: User uploaded '{self.last_uploaded_filename_for_chat_display}')"
+            })
+            self.last_uploaded_filename_for_chat_display = None # Reset after displaying
+
+        if message is not None and message.strip() != "": # Add user's actual typed message
             history.append({"role": "user", "content": message})
-        return history, gr.Textbox(value=message, interactive=False)
+
+        # If only a file was uploaded and no text message, the history will contain the path and upload notification.
+        # If there's also a text message, it's appended after.
+
+        return history, gr.Textbox(value="", interactive=False) # Clear textbox, set to non-interactive
 
     async def process_message(
         self, message: str, display_image: Optional[str], chat_history: List[ChatMessage]
@@ -146,30 +162,152 @@ class ChatInterface:
                     elif "execute" in event:
                         for message in event["execute"]["messages"]:
                             tool_name = message.name
-                            tool_result = eval(message.content)[0]
+                            tool_result_obj = eval(message.content)[0] # The actual Python object
 
-                            if tool_result:
-                                metadata = {"title": f"🖼️ Image from tool: {tool_name}"}
-                                formatted_result = " ".join(
-                                    line.strip() for line in str(tool_result).splitlines()
-                                ).strip()
-                                metadata["description"] = formatted_result
+                            handled_specifically = False
+
+                            if tool_name == "image_visualizer" and isinstance(tool_result_obj, dict) and "image_path" in tool_result_obj:
+                                self.display_file_path = tool_result_obj["image_path"]
                                 chat_history.append(
                                     ChatMessage(
                                         role="assistant",
-                                        content=formatted_result,
-                                        metadata=metadata,
+                                        content={"path": self.display_file_path},
+                                        metadata={"title": "Visualized Image"}
+                                    )
+                                )
+                                handled_specifically = True
+
+                            elif tool_name == "Medical Imaging Series Analyzer" and isinstance(tool_result_obj, dict):
+                                formatted_series_info = f"**{tool_name} Results:**\n"
+                                if tool_result_obj.get("status"):
+                                    formatted_series_info += f"- Status: {tool_result_obj['status']}\n"
+                                if tool_result_obj.get("number_of_slices") is not None:
+                                    formatted_series_info += f"- Slices Found: {tool_result_obj['number_of_slices']}\n"
+
+                                series_meta = tool_result_obj.get("series_metadata", {})
+                                if series_meta:
+                                    formatted_series_info += "- Key Series Metadata:\n"
+                                    for k, v_val in series_meta.items():
+                                        if v_val and v_val != "N/A" and k in ["Modality", "SeriesDescription", "BodyPartExamined", "StudyDescription", "PatientID"]:
+                                            formatted_series_info += f"  - {k}: {v_val}\n"
+
+                                rep_slice_meta = tool_result_obj.get("representative_slice_details", {})
+                                if rep_slice_meta and rep_slice_meta.get("error") is None :
+                                     formatted_series_info += "- Representative Slice Info:\n"
+                                     for k, v_val in rep_slice_meta.items():
+                                         if v_val and v_val != "N/A" and k in ["InstanceNumber", "SliceThickness", "ImagePositionPatient"]:
+                                             formatted_series_info += f"  - {k}: {v_val}\n"
+
+                                # Add the textual summary to chat
+                                chat_history.append(
+                                    ChatMessage(
+                                        role="assistant",
+                                        content=formatted_series_info.strip(),
+                                        metadata={"title": "Imaging Series Analysis"}
                                     )
                                 )
 
-                            # For image_visualizer, use display path
-                            if tool_name == "image_visualizer":
-                                self.display_file_path = tool_result["image_path"]
+                                # Handle image display if path is present
+                                if tool_result_obj.get("representative_image_path"):
+                                    self.display_file_path = tool_result_obj["representative_image_path"]
+                                    chat_history.append(
+                                        ChatMessage(
+                                            role="assistant",
+                                            content={"path": self.display_file_path},
+                                            metadata={"title": "Representative Slice"}
+                                        )
+                                    )
+                                    # Add a small note about the image in the main text message if not already covered
+                                    # This is now implicitly handled by the image appearing.
+                                elif tool_result_obj.get("status", "").startswith("completed_with_errors") or tool_result_obj.get("error"):
+                                    # If image path is missing but there were errors, mention it.
+                                    # The error from tool_result_obj.get("error") or rep_slice_meta.get("png_error")
+                                    # could be added to formatted_series_info earlier.
+                                    pass # Error details should be part of formatted_series_info
+
+                                handled_specifically = True
+
+                            elif tool_name == "Ophthalmic Imaging Analyzer" and isinstance(tool_result_obj, dict):
+                                formatted_ophth_info = f"**{tool_name} Results:**\n"
+                                if tool_result_obj.get("status"):
+                                    formatted_ophth_info += f"- Status: {tool_result_obj['status']}\n"
+                                if tool_result_obj.get("image_type"):
+                                    formatted_ophth_info += f"- Image Type: {tool_result_obj['image_type']}\n"
+
+                                metadata = tool_result_obj.get("metadata", {}) # For single image or video
+                                series_metadata = tool_result_obj.get("series_metadata", {}) # For DICOM series
+                                rep_slice_details = tool_result_obj.get("representative_slice_details", {})
+
+                                if tool_result_obj.get("number_of_images_in_series") is not None:
+                                    formatted_ophth_info += f"- Images in Series: {tool_result_obj['number_of_images_in_series']}\n"
+
+                                if series_metadata:
+                                    formatted_ophth_info += "- Key Series Metadata:\n"
+                                    for k, v in series_metadata.items():
+                                        if v and v != "N/A" and k in ["Modality", "Laterality", "SeriesDescription", "PatientID"]:
+                                            formatted_ophth_info += f"  - {k}: {v}\n"
+                                if rep_slice_details and not rep_slice_details.get("error"):
+                                    formatted_ophth_info += "- Representative Slice/Image Details:\n"
+                                    for k, v in rep_slice_details.items():
+                                         if v and v != "N/A" and k in ["Laterality", "ImageType", "ImageComments", "InstanceNumber"]:
+                                            formatted_ophth_info += f"  - {k}: {v}\n"
+                                if metadata: # For single images or video
+                                    formatted_ophth_info += "- File Metadata:\n"
+                                    for k, v in metadata.items():
+                                        if v and v != "N/A":
+                                            formatted_ophth_info += f"  - {k}: {v}\n"
+
                                 chat_history.append(
                                     ChatMessage(
                                         role="assistant",
-                                        # content=gr.Image(value=self.display_file_path),
-                                        content={"path": self.display_file_path},
+                                        content=formatted_ophth_info.strip(),
+                                        metadata={"title": "Ophthalmic Analysis"}
+                                    )
+                                )
+
+                                # Handle image display
+                                display_image_path = tool_result_obj.get("representative_image_path") or tool_result_obj.get("image_path")
+                                if display_image_path:
+                                    self.display_file_path = display_image_path
+                                    chat_history.append(
+                                        ChatMessage(
+                                            role="assistant",
+                                            content={"path": self.display_file_path},
+                                            metadata={"title": "Ophthalmic Image/Frame"}
+                                        )
+                                    )
+
+                                # Handle video frames if any (just list them for now)
+                                extracted_frames = tool_result_obj.get("extracted_frames_paths", [])
+                                if extracted_frames and len(extracted_frames) > 1: # Already showed the first one
+                                    frames_info = f"- Additional Extracted Frames ({len(extracted_frames)-1}):\n"
+                                    for frame_p in extracted_frames[1:3]: # Show next 2 paths as example
+                                        frames_info += f"  - {Path(frame_p).name}\n"
+                                    if len(extracted_frames) > 3:
+                                        frames_info += "  - ... and more.\n"
+                                    chat_history.append(
+                                        ChatMessage(
+                                            role="assistant",
+                                            content=frames_info.strip(),
+                                            metadata={"title": "Extracted Video Frames"}
+                                        )
+                                    )
+                                handled_specifically = True
+
+
+                            # Generic handling for other tools or if specific handling didn't occur
+                            if not handled_specifically and tool_result_obj:
+                                metadata = {"title": f"⚙️ Tool Output: {tool_name}"}
+                                # Convert the raw tool_result_obj to a flat string for display
+                                formatted_result_str = " ".join(
+                                    line.strip() for line in str(tool_result_obj).splitlines()
+                                ).strip()
+                                metadata["description"] = formatted_result_str
+                                chat_history.append(
+                                    ChatMessage(
+                                        role="assistant",
+                                        content=formatted_result_str,
+                                        metadata=metadata,
                                     )
                                 )
 
@@ -225,7 +363,7 @@ def create_demo(agent, tools_dict):
                         with gr.Column(scale=3):
                             txt = gr.Textbox(
                                 show_label=False,
-                                placeholder="Ask about the X-ray...",
+                                placeholder="Ask about the uploaded file or type your query...",
                                 container=False,
                             )
 
@@ -240,7 +378,19 @@ def create_demo(agent, tools_dict):
                         )
                         dicom_upload = gr.UploadButton(
                             "📄 Upload DICOM",
-                            file_types=["file"],
+                            file_types=["file"], # Accepts any file, filtered by .dcm in handle_upload
+                        )
+                        blood_test_upload = gr.UploadButton( # New button
+                            "🩸 Upload Blood Test (.pdf, .csv)",
+                            file_types=[".pdf", ".csv"],
+                        )
+                        mr_ct_series_upload = gr.UploadButton( # New button for MR/CT series
+                            "🧲 Upload MR/CT Series (ZIP)",
+                            file_types=[".zip"],
+                        )
+                        ophthalmic_upload = gr.UploadButton( # New button for Ophthalmic images/series
+                            "👁️ Upload Eye FFA/OCT",
+                            file_types=[".zip", ".dcm", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".mp4", ".avi"],
                         )
                     with gr.Row():
                         clear_btn = gr.Button("Clear Chat")
@@ -272,6 +422,12 @@ def create_demo(agent, tools_dict):
         upload_button.upload(handle_file_upload, inputs=upload_button, outputs=image_display)
 
         dicom_upload.upload(handle_file_upload, inputs=dicom_upload, outputs=image_display)
+
+        blood_test_upload.upload(handle_file_upload, inputs=blood_test_upload, outputs=image_display) # Added event handler
+
+        mr_ct_series_upload.upload(handle_file_upload, inputs=mr_ct_series_upload, outputs=image_display) # Added event handler for series
+
+        ophthalmic_upload.upload(handle_file_upload, inputs=ophthalmic_upload, outputs=image_display) # Added event handler for ophthalmic
 
         clear_btn.click(clear_chat, outputs=[chatbot, image_display])
         new_thread_btn.click(new_thread, outputs=[chatbot, image_display])
