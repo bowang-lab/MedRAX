@@ -21,13 +21,20 @@ MedRAX is built on a robust technical foundation:
 - **Modular Design**: Tool-agnostic architecture allowing easy integration of new capabilities
 
 ### Integrated Tools
-- **Visual QA**: Utilizes CheXagent and LLaVA-Med for complex visual understanding and medical reasoning
-- **Segmentation**: Employs MedSAM and PSPNet model trained on ChestX-Det for precise anatomical structure identification
-- **Grounding**: Uses Maira-2 for localizing specific findings in medical images
-- **Report Generation**: Implements SwinV2 Transformer trained on CheXpert Plus for detailed medical reporting
-- **Disease Classification**: Leverages DenseNet-121 from TorchXRayVision for detecting 18 pathology classes
-- **X-ray Generation**: Utilizes RoentGen for synthetic CXR generation
-- **Utilities**: Includes DICOM processing, visualization tools, and custom plotting capabilities
+- **Visual QA**: Utilizes CheXagent and LLaVA-Med for complex visual understanding and medical reasoning.
+- **CXR Disease Classification**: Leverages DenseNet-121 from TorchXRayVision for detecting 18 core pathology classes. Additional pathologies (e.g., Tuberculosis, Scoliosis, ILD, Pulmonary Fibrosis) are listed but are currently stubbed (output default values) pending model updates.
+- **CXR Segmentation**: Employs a PSPNet model trained on ChestX-Det for precise anatomical structure identification (14 core structures). Can attempt calculation of Cardiothoracic Ratio (CTR) based on heart and lung segmentations (approximation). Additional segmentation targets (e.g., Ribs, Pleural Effusion, Consolidation, Nodules/Masses) can be requested but are currently stubbed pending model updates.
+- **Grounding**: Uses Maira-2 for localizing specific findings in medical images.
+- **CXR Report Generation**: Implements Vision Transformer-BERT models for generating findings and impression sections of a radiological report.
+- **Advanced CXR Analysis (LLM-driven)**:
+    - *Detailed Reporting*: The agent can synthesize outputs from classification, segmentation, and report generation tools to create more comprehensive and detailed reports.
+    - *Comparative Analysis*: The agent can compare current and prior X-rays by analyzing outputs from other tools for both images and highlighting changes or stability.
+    - *View Consideration*: The agent is guided to consider X-ray view information (from DICOM metadata) and advise caution if analyzing non-frontal views with current models.
+- **X-ray Generation**: Utilizes RoentGen for synthetic CXR generation.
+- **Ultrasound Analysis (New)**:
+    - `UltrasoundClassifierTool`: Classifies ultrasound images for common findings (e.g., cysts, masses). *(Note: Currently uses a stubbed model; requires integration with an actual ultrasound classification model.)*
+    - `UltrasoundSegmentationTool`: Segments structures in ultrasound images (e.g., organs, lesions). *(Note: Currently uses a stubbed model; requires integration with an actual ultrasound segmentation model.)*
+- **Utilities**: Includes DICOM processing (enhanced for multi-frame and color ultrasound/X-ray images), visualization tools, and custom plotting capabilities.
 <br><br>
 
 
@@ -124,11 +131,13 @@ The following tools will automatically download their model weights when initial
 ```python
 ChestXRayClassifierTool(device=device)
 ```
+*Note: Covers 18 core pathologies. Additional pathologies like Tuberculosis, Scoliosis, etc., are listed in the tool's interface but are currently stubbed (return default values) pending underlying model updates.*
 
 ### Segmentation Tool
 ```python
 ChestXRaySegmentationTool(device=device)
 ```
+*Note: Segments 14 core anatomical structures. Can attempt Cardiothoracic Ratio (CTR) calculation. Additional targets like Ribs, Pleural Effusion, etc., are listed but currently stubbed pending model updates.*
 
 ### Grounding Tool
 ```python
@@ -176,11 +185,19 @@ Support for MedSAM segmentation will be added in a future update.
 ```
 
 ### Utility Tools
-No additional model weights required:
+No additional model weights required for base functionality:
 ```python
 ImageVisualizerTool()
-DicomProcessorTool(temp_dir=temp_dir)
+DicomProcessorTool(temp_dir=temp_dir) # Enhanced for ultrasound DICOMs
 ```
+
+### New Ultrasound Tools (Stubbed Implementation)
+The following ultrasound tools are included with placeholder (stubbed) logic. For actual analysis, they require integration with appropriate pre-trained models:
+```python
+UltrasoundClassifierTool(device=device)
+UltrasoundSegmentationTool(device=device, temp_dir=temp_dir)
+```
+**Note:** These tools will output placeholder data and messages indicating that full model integration is pending.
 <br>
 
 ## Manual Setup Required
