@@ -27,7 +27,10 @@ MedRAX is built on a robust technical foundation:
 - **Report Generation**: Implements SwinV2 Transformer trained on CheXpert Plus for detailed medical reporting
 - **Disease Classification**: Leverages DenseNet-121 from TorchXRayVision for detecting 18 pathology classes
 - **X-ray Generation**: Utilizes RoentGen for synthetic CXR generation
-- **Utilities**: Includes DICOM processing, visualization tools, and custom plotting capabilities
+- **Ultrasound Analysis (New)**:
+    - `UltrasoundClassifierTool`: Classifies ultrasound images for common findings (e.g., cysts, masses). *(Note: Currently uses a stubbed model; requires integration with an actual ultrasound classification model.)*
+    - `UltrasoundSegmentationTool`: Segments structures in ultrasound images (e.g., organs, lesions). *(Note: Currently uses a stubbed model; requires integration with an actual ultrasound segmentation model.)*
+- **Utilities**: Includes DICOM processing (enhanced for multi-frame and color ultrasound images), visualization tools, and custom plotting capabilities
 <br><br>
 
 
@@ -176,11 +179,19 @@ Support for MedSAM segmentation will be added in a future update.
 ```
 
 ### Utility Tools
-No additional model weights required:
+No additional model weights required for base functionality:
 ```python
 ImageVisualizerTool()
-DicomProcessorTool(temp_dir=temp_dir)
+DicomProcessorTool(temp_dir=temp_dir) # Enhanced for ultrasound DICOMs
 ```
+
+### New Ultrasound Tools (Stubbed Implementation)
+The following ultrasound tools are included with placeholder (stubbed) logic. For actual analysis, they require integration with appropriate pre-trained models:
+```python
+UltrasoundClassifierTool(device=device)
+UltrasoundSegmentationTool(device=device, temp_dir=temp_dir)
+```
+**Note:** These tools will output placeholder data and messages indicating that full model integration is pending.
 <br>
 
 ## Manual Setup Required
