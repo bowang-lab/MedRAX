@@ -5,7 +5,9 @@ from dotenv import load_dotenv
 from transformers import logging
 
 from langgraph.checkpoint.memory import MemorySaver
-from medrax.models import ModelFactory
+from langchain_openai import ChatOpenAI
+from langgraph.checkpoint.memory import MemorySaver
+from langchain_openai import ChatOpenAI
 
 from interface import create_demo
 from medrax.agent import *
@@ -23,10 +25,10 @@ def initialize_agent(
     model_dir="/model-weights",
     temp_dir="temp",
     device="cuda",
-    model="gpt-4.1-2025-04-14",
+    model="chatgpt-4o-latest",
     temperature=0.7,
     top_p=0.95,
-    model_kwargs={}
+    openai_kwargs={}
 ):
     """Initialize the MedRAX agent with specified tools and configuration.
 
@@ -36,10 +38,10 @@ def initialize_agent(
         model_dir (str, optional): Directory containing model weights. Defaults to "/model-weights".
         temp_dir (str, optional): Directory for temporary files. Defaults to "temp".
         device (str, optional): Device to run models on. Defaults to "cuda".
-        model (str, optional): Model to use. Defaults to "gpt-4o".
+        model (str, optional): Model to use. Defaults to "chatgpt-4o-latest".
         temperature (float, optional): Temperature for the model. Defaults to 0.7.
         top_p (float, optional): Top P for the model. Defaults to 0.95.
-        model_kwargs (dict, optional): Additional keyword arguments for model.
+        openai_kwargs (dict, optional): Additional keyword arguments for OpenAI API, such as API key and base URL.
 
     Returns:
         Tuple[Agent, Dict[str, BaseTool]]: Initialized agent and dictionary of tool instances
@@ -48,11 +50,7 @@ def initialize_agent(
     prompt = prompts["MEDICAL_ASSISTANT"]
 
     all_tools = {
-        "TorchXRayVisionClassifierTool": lambda: TorchXRayVisionClassifierTool(device=device),
-        "ArcPlusClassifierTool": lambda: ArcPlusClassifierTool(
-            cache_dir=model_dir,
-            device=device
-        ),
+        "ChestXRayClassifierTool": lambda: ChestXRayClassifierTool(device=device),
         "ChestXRaySegmentationTool": lambda: ChestXRaySegmentationTool(device=device),
         "LlavaMedTool": lambda: LlavaMedTool(cache_dir=model_dir, device=device, load_in_8bit=True),
         "XRayVQATool": lambda: XRayVQATool(cache_dir=model_dir, device=device),
@@ -67,8 +65,6 @@ def initialize_agent(
         ),
         "ImageVisualizerTool": lambda: ImageVisualizerTool(),
         "DicomProcessorTool": lambda: DicomProcessorTool(temp_dir=temp_dir),
-        "WebBrowserTool": lambda: WebBrowserTool(),
-        "PythonSandboxTool": lambda: create_python_sandbox(),
     }
 
     # Initialize only selected tools or all if none specified
@@ -79,22 +75,9 @@ def initialize_agent(
             tools_dict[tool_name] = all_tools[tool_name]()
 
     checkpointer = MemorySaver()
-    
-    # Create the language model using the factory
-    try:
-        llm = ModelFactory.create_model(
-            model_name=model,
-            temperature=temperature,
-            top_p=top_p,
-            **model_kwargs
-        )
-    except ValueError as e:
-        print(f"Error creating language model: {e}")
-        print(f"Available model providers: {list(ModelFactory._model_providers.keys())}")
-        raise
-    
+    model = ChatOpenAI(model=model, temperature=temperature, top_p=top_p, **openai_kwargs)
     agent = Agent(
-        llm,
+        model,
         tools=list(tools_dict.values()),
         log_tools=True,
         log_dir="logs",
@@ -116,38 +99,35 @@ if __name__ == "__main__":
     # Example: initialize with only specific tools
     # Here three tools are commented out, you can uncomment them to use them
     selected_tools = [
-        # "ImageVisualizerTool",
-        # "DicomProcessorTool",
-        # "TorchXRayVisionClassifierTool",
-        # "ArcPlusClassifierTool",
-        # "ChestXRaySegmentationTool",
-        # "ChestXRayReportGeneratorTool",
-        # "XRayVQATool",
-        "WebBrowserTool",  # Add the web browser tool
-        "PythonSandboxTool",  # Add the Python sandbox tool
+        "ImageVisualizerTool",
+        "DicomProcessorTool",
+        "ChestXRayClassifierTool",
+        "ChestXRaySegmentationTool",
+        "ChestXRayReportGeneratorTool",
+        "XRayVQATool",
         # "LlavaMedTool",
         # "XRayPhraseGroundingTool",
         # "ChestXRayGeneratorTool",
     ]
 
-    # Prepare any additional model-specific kwargs
-    model_kwargs = {}
-    
-    # Set up API keys for the web browser tool
-    # You'll need to set these environment variables:
-    # - GOOGLE_SEARCH_API_KEY: Your Google Custom Search API key
-    # - GOOGLE_SEARCH_ENGINE_ID: Your Google Custom Search Engine ID
-    
+    # Collect the ENV variables
+    openai_kwargs = {}
+    if api_key := os.getenv("OPENAI_API_KEY"):
+        openai_kwargs["api_key"] = api_key
+
+    if base_url := os.getenv("OPENAI_BASE_URL"):
+        openai_kwargs["base_url"] = base_url
+
     agent, tools_dict = initialize_agent(
         "medrax/docs/system_prompts.txt",
         tools_to_use=selected_tools,
-        model_dir="/model-weights",
+        model_dir="/model-weights",  # Change this to the path of the model weights
         temp_dir="temp",  # Change this to the path of the temporary directory
-        device="cuda",
-        model="gpt-4.1-2025-04-14",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
+        device="cuda",  # Change this to the device you want to use
+        model="gpt-4o",  # Change this to the model you want to use, e.g. gpt-4o-mini
         temperature=0.7,
         top_p=0.95,
-        model_kwargs=model_kwargs
+        openai_kwargs=openai_kwargs
     )
     demo = create_demo(agent, tools_dict)
 
