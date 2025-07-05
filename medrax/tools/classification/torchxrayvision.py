@@ -13,15 +13,15 @@ from langchain_core.callbacks import (
 from langchain_core.tools import BaseTool
 
 
-class ChestXRayInput(BaseModel):
-    """Input for chest X-ray analysis tools. Only supports JPG or PNG images."""
+class TorchXRayVisionInput(BaseModel):
+    """Input for TorchXRayVision chest X-ray analysis tools. Only supports JPG or PNG images."""
 
     image_path: str = Field(
         ..., description="Path to the radiology image file, only supports JPG or PNG images"
     )
 
 
-class ChestXRayClassifierTool(BaseTool):
+class TorchXRayVisionClassifierTool(BaseTool):
     """Tool that classifies chest X-ray images for multiple pathologies.
 
     This tool uses a pre-trained DenseNet model to analyze chest X-ray images and
@@ -35,9 +35,9 @@ class ChestXRayClassifierTool(BaseTool):
     A higher value indicates a higher likelihood of the condition being present.
     """
 
-    name: str = "chest_xray_classifier"
+    name: str = "torchxrayvision_classifier"
     description: str = (
-        "A tool that analyzes chest X-ray images and classifies them for 18 different pathologies. "
+        "A tool that analyzes chest X-ray images and classifies them for 18 different pathologies using TorchXRayVision DenseNet. "
         "Input should be the path to a chest X-ray image file. "
         "Output is a dictionary of pathologies and their predicted probabilities (0 to 1). "
         "Pathologies include: Atelectasis, Cardiomegaly, Consolidation, Edema, Effusion, Emphysema, "
@@ -45,7 +45,7 @@ class ChestXRayClassifierTool(BaseTool):
         "Lung Opacity, Mass, Nodule, Pleural Thickening, Pneumonia, and Pneumothorax. "
         "Higher values indicate a higher likelihood of the condition being present."
     )
-    args_schema: Type[BaseModel] = ChestXRayInput
+    args_schema: Type[BaseModel] = TorchXRayVisionInput
     model: xrv.models.DenseNet = None
     device: Optional[str] = "cuda"
     transform: torchvision.transforms.Compose = None

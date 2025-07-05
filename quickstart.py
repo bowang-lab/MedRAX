@@ -11,7 +11,7 @@ from datasets import load_dataset
 
 # Initialize global variables
 logger = logging.getLogger('benchmark')
-model_name = 'chatgpt-4o-latest'  # default value
+model_name = 'gpt-4.1-2025-04-14'  # default value
 temperature = 0.2  # default value
 log_filename = None
 
@@ -199,7 +199,7 @@ def main():
     # Add command line argument parsing
     parser = argparse.ArgumentParser(description='Run medical image analysis benchmark')
     parser.add_argument('--use-urls', action='store_true', help='Use image URLs instead of local files')
-    parser.add_argument('--model', type=str, default='chatgpt-4o-latest', help='Model name to use')
+    parser.add_argument('--model', type=str, default='gpt-4.1-2025-04-14', help='Model name to use')
     parser.add_argument('--temperature', type=float, default=0.2, help='Temperature for model inference')
     parser.add_argument('--log-prefix', type=str, help='Prefix for log filename (default: model name)')
     parser.add_argument('--max-cases', type=int, default=None, help='Maximum number of cases to process (default: all)')

@@ -10,7 +10,7 @@ authors = [
     {name = "Adibvafa Fallahpour", email = "adibvafa.fallahpour@mail.utoronto.ca"},
 ]
 license = {file = "LICENSE"}
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "requests>=2.25.0",
     "numpy>=1.19.0",
@@ -58,6 +58,9 @@ dependencies = [
     "jupyter>=1.0.0",
     "albumentations>=1.0.0",
     "pyarrow>=10.0.0",
+    "langchain-google-genai>=0.1.0",
+    "ray>=2.9.0",
+    "langchain-sandbox>=0.1.0",
 ]
 
 [project.optional-dependencies]
@@ -76,7 +79,7 @@ exclude = ["med_env*", "demo*"]
 
 [tool.black]
 line-length = 100
-target-version = ['py310']
+target-version = ['py311']
 
 [tool.isort]
 profile = "black"
