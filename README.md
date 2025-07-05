@@ -28,6 +28,7 @@ MedRAX is built on a robust technical foundation:
 - **Disease Classification**: Leverages DenseNet-121 from TorchXRayVision for detecting 18 pathology classes
 - **X-ray Generation**: Utilizes RoentGen for synthetic CXR generation
 - **Utilities**: Includes DICOM processing, visualization tools, and custom plotting capabilities
+- **Assistant Doctor**: A feature to help doctors diagnose diseases, perform examinations, and prescribe medications.
 <br><br>
 
 
@@ -105,6 +106,7 @@ selected_tools = [
     "ImageVisualizerTool",
     "ChestXRayClassifierTool",
     "ChestXRaySegmentationTool",
+    "AssistantDoctorTool",
     # Add or remove tools as needed
 ]
 
@@ -180,7 +182,38 @@ No additional model weights required:
 ```python
 ImageVisualizerTool()
 DicomProcessorTool(temp_dir=temp_dir)
+AssistantDoctorTool() # Relies on the main agent's LLM, no separate model.
 ```
+<br>
+
+### Assistant Doctor Tool Usage
+The `AssistantDoctorTool` helps with clinical decision-making. It takes a JSON input with the following fields:
+- `symptoms` (str, optional): Patient's reported symptoms.
+- `medical_history` (str, optional): Patient's relevant medical history.
+- `image_path` (str, optional): Path to a relevant medical image. The image itself will be processed by the agent's multimodal LLM.
+- `current_diagnosis` (str, optional): Current or suspected diagnosis. Required if `request_type` is 'medication'.
+- `request_type` (str, required): Type of assistance:
+    - `"diagnosis"`: Suggests differential diagnoses based on provided information.
+    - `"examination"`: Recommends tests/examinations based on symptoms and/or current diagnosis.
+    - `"medication"`: Suggests medications for a confirmed diagnosis.
+
+The tool constructs a detailed prompt for the main LLM, which then generates the response.
+
+**Example (programmatic call, actual use via agent):**
+```python
+# This is how the tool structures data for the LLM;
+# you would typically interact via the MedRAX agent interface.
+assistant_tool = AssistantDoctorTool()
+params = {
+    "symptoms": "fever, cough",
+    "medical_history": "none",
+    "image_path": "path/to/xray.jpg", # Agent provides image to LLM
+    "request_type": "diagnosis"
+}
+prompt_for_llm = assistant_tool._run(**params)
+# The agent then sends this prompt (and image) to the LLM.
+```
+
 <br>
 
 ## Manual Setup Required
