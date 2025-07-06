@@ -1,11 +1,14 @@
 import re
 import base64
+import json
+import ast
 import gradio as gr
 from pathlib import Path
 import time
 import shutil
 from typing import AsyncGenerator, List, Optional, Tuple
 from gradio import ChatMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 
 class ChatInterface:
@@ -32,6 +35,7 @@ class ChatInterface:
         # Separate storage for original and display paths
         self.original_file_path = None  # For LLM (.dcm or other)
         self.display_file_path = None  # For UI (always viewable format)
+        self.pending_tool_calls = {}
 
     def handle_upload(self, file_path: str) -> str:
         """
@@ -132,48 +136,99 @@ class ChatInterface:
             messages.append({"role": "user", "content": [{"type": "text", "text": message}]})
 
         try:
-            for event in self.agent.workflow.stream(
-                {"messages": messages}, {"configurable": {"thread_id": self.current_thread_id}}
+            accumulated_content = ""
+            final_message = None
+
+            for chunk in self.agent.workflow.stream(
+                {"messages": messages},
+                {"configurable": {"thread_id": self.current_thread_id}},
+                stream_mode="updates",
             ):
-                if isinstance(event, dict):
-                    if "agent" in event:
-                        content = event["agent"]["messages"][-1].content
-                        if content:
-                            content = re.sub(r"temp/[^\s]*", "", content)
-                            chat_history.append(ChatMessage(role="assistant", content=content))
+                if not isinstance(chunk, dict):
+                    continue
+
+                for node_name, node_output in chunk.items():
+                    if "messages" not in node_output:
+                        continue
+
+                    for msg in node_output["messages"]:
+                        if isinstance(msg, AIMessageChunk) and msg.content:
+                            accumulated_content += msg.content
+                            if final_message is None:
+                                final_message = ChatMessage(
+                                    role="assistant", content=accumulated_content
+                                )
+                                chat_history.append(final_message)
+                            else:
+                                final_message.content = accumulated_content
                             yield chat_history, self.display_file_path, ""
 
-                    elif "tools" in event:
-                        for message in event["tools"]["messages"]:
-                            tool_name = message.name
-                            tool_result = eval(message.content)[0]
+                        elif isinstance(msg, AIMessage):
+                            if msg.content:
+                                final_content = re.sub(r"temp/[^\s]*", "", msg.content).strip()
+                                if final_message:
+                                    final_message.content = final_content
+                                else:
+                                    chat_history.append(
+                                        ChatMessage(role="assistant", content=final_content)
+                                    )
+                                yield chat_history, self.display_file_path, ""
 
-                            if tool_result:
-                                metadata = {"title": f"🖼️ Image from tool: {tool_name}"}
-                                formatted_result = " ".join(
-                                    line.strip() for line in str(tool_result).splitlines()
-                                ).strip()
-                                metadata["description"] = formatted_result
+                            if msg.tool_calls:
+                                for tool_call in msg.tool_calls:
+                                    self.pending_tool_calls[tool_call["id"]] = {
+                                        "name": tool_call["name"],
+                                        "args": tool_call["args"],
+                                    }
+
+                            final_message = None
+                            accumulated_content = ""
+
+                        elif isinstance(msg, ToolMessage):
+                            tool_call_id = msg.tool_call_id
+                            if tool_call_id in self.pending_tool_calls:
+                                pending_call = self.pending_tool_calls.pop(tool_call_id)
+                                tool_name = pending_call["name"]
+                                tool_args = pending_call["args"]
+
+                                try:
+                                    tool_output_json = json.loads(msg.content)
+                                    tool_output_str = json.dumps(tool_output_json, indent=2)
+                                except (json.JSONDecodeError, TypeError):
+                                    tool_output_str = str(msg.content)
+
+                                tool_args_str = json.dumps(tool_args, indent=2)
+
+                                description = f"**Input:**\n```json\n{tool_args_str}\n```\n\n**Output:**\n```json\n{tool_output_str}\n```"
+
+                                metadata = {
+                                    "title": f"⚒️ Tool: {tool_name}",
+                                    "description": description,
+                                    "status": "done",
+                                }
                                 chat_history.append(
                                     ChatMessage(
                                         role="assistant",
-                                        content=formatted_result,
+                                        content=description,
                                         metadata=metadata,
                                     )
                                 )
+                                yield chat_history, self.display_file_path, ""
 
-                            # For image_visualizer, use display path
-                            if tool_name == "image_visualizer":
-                                self.display_file_path = tool_result["image_path"]
-                                chat_history.append(
-                                    ChatMessage(
-                                        role="assistant",
-                                        # content=gr.Image(value=self.display_file_path),
-                                        content={"path": self.display_file_path},
-                                    )
-                                )
-
-                            yield chat_history, self.display_file_path, ""
+                                if tool_name == "image_visualizer":
+                                    try:
+                                        result = json.loads(msg.content)
+                                        if isinstance(result, dict) and "image_path" in result:
+                                            self.display_file_path = result["image_path"]
+                                            chat_history.append(
+                                                ChatMessage(
+                                                    role="assistant",
+                                                    content={"path": self.display_file_path},
+                                                )
+                                            )
+                                            yield chat_history, self.display_file_path, ""
+                                    except (json.JSONDecodeError, TypeError):
+                                        pass
 
         except Exception as e:
             chat_history.append(
@@ -181,7 +236,7 @@ class ChatInterface:
                     role="assistant", content=f"❌ Error: {str(e)}", metadata={"title": "Error"}
                 )
             )
-            yield chat_history, self.display_file_path
+            yield chat_history, self.display_file_path, ""
 
 
 def create_demo(agent, tools_dict):
@@ -207,10 +262,10 @@ def create_demo(agent, tools_dict):
             )
 
             with gr.Row():
-                with gr.Column(scale=3):
+                with gr.Column(scale=5):
                     chatbot = gr.Chatbot(
                         [],
-                        height=800,
+                        height=1000,
                         container=True,
                         show_label=True,
                         elem_classes="chat-box",
@@ -231,7 +286,7 @@ def create_demo(agent, tools_dict):
 
                 with gr.Column(scale=3):
                     image_display = gr.Image(
-                        label="Image", type="filepath", height=700, container=True
+                        label="Image", type="filepath", height=600, container=True
                     )
                     with gr.Row():
                         upload_button = gr.UploadButton(

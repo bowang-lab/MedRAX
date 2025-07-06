@@ -43,6 +43,7 @@ def initialize_agent(
     top_p: float = 0.95,
     rag_config: Optional[RAGConfig] = None,
     model_kwargs: Dict[str, Any] = {},
+    debug: bool = False,
 ):
     """Initialize the MedRAX agent with specified tools and configuration.
 
@@ -57,6 +58,7 @@ def initialize_agent(
         top_p (float, optional): Top P for the model. Defaults to 0.95.
         rag_config (RAGConfig, optional): Configuration for the RAG tool. Defaults to None.
         model_kwargs (dict, optional): Additional keyword arguments for model.
+        debug (bool, optional): Whether to enable debug mode. Defaults to False.
 
     Returns:
         Tuple[Agent, Dict[str, BaseTool]]: Initialized agent and dictionary of tool instances
@@ -119,6 +121,7 @@ def initialize_agent(
         log_dir="logs",
         system_prompt=prompt,
         checkpointer=checkpointer,
+        debug=debug,
     )
     print("Agent initialized")
 
@@ -188,6 +191,7 @@ if __name__ == "__main__":
         top_p=0.95,
         model_kwargs=model_kwargs,
         rag_config=rag_config,
+        debug=True,
     )
 
     # Create and launch the web interface
