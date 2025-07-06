@@ -158,7 +158,7 @@ class ChestXRayReportGeneratorTool(BaseTool):
         self,
         image_path: str,
         run_manager: Optional[CallbackManagerForToolRun] = None,
-    ) -> Tuple[str, Dict]:
+    ) -> Tuple[Dict[str, Any], Dict]:
         """Generate a comprehensive chest X-ray report containing both findings and impression.
 
         Args:
@@ -166,7 +166,7 @@ class ChestXRayReportGeneratorTool(BaseTool):
             run_manager (Optional[CallbackManagerForToolRun]): The callback manager.
 
         Returns:
-            Tuple[str, Dict]: A tuple containing the complete report and metadata.
+            Tuple[Dict[str, Any], Dict]: A tuple containing the output dictionary and metadata dictionary.
         """
         try:
             # Process image for both models
@@ -193,25 +193,33 @@ class ChestXRayReportGeneratorTool(BaseTool):
                 f"IMPRESSION:\n{impression_text}"
             )
 
+            output = {
+                "report": report,
+                "findings": findings_text,
+                "impression": impression_text,
+            }
+
             metadata = {
                 "image_path": image_path,
                 "analysis_status": "completed",
                 "sections_generated": ["findings", "impression"],
             }
 
-            return report, metadata
+            return output, metadata
 
         except Exception as e:
-            return f"Error generating report: {str(e)}", {
+            output = {"error": f"Error generating report: {str(e)}"}
+            metadata = {
                 "image_path": image_path,
                 "analysis_status": "failed",
                 "error": str(e),
             }
+            return output, metadata
 
     async def _arun(
         self,
         image_path: str,
         run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
-    ) -> Tuple[str, Dict]:
+    ) -> Tuple[Dict[str, Any], Dict]:
         """Asynchronously generate a comprehensive chest X-ray report."""
         return self._run(image_path)
