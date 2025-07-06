@@ -54,14 +54,13 @@ Unzip the Eurorad figures to your local `MedMAX` directory.
 unzip chestagentbench/figures.zip
 ```
 
-To evaluate with GPT-4o, set your OpenAI API key and run the quickstart script.
+To evaluate with GPT-4o, set your OpenAI API key in your `.env` file (see the "Environment Variable Setup" section for details) and run the quickstart script.
 ```
-export OPENAI_API_KEY="<your-openai-api-key>"
 python quickstart.py \
-    --model chatgpt-4o-latest \
+    --model gpt-4o \
     --temperature 0.2 \
     --max-cases 2 \
-    --log-prefix chatgpt-4o-latest \
+    --log-prefix gpt-4o \
     --use-urls
 ```
 
@@ -89,6 +88,43 @@ cd MedRAX
 
 # Install package
 pip install -e .
+```
+
+### Environment Variable Setup
+Create a `.env` file in the root of your project directory. MedRAX will automatically load variables from this file, making it a secure way to manage your API keys.
+
+Below is an example `.env` file. Copy this into a new file named `.env`, and fill in the values for the services you intend to use.
+
+```env
+# -------------------------
+# LLM Provider Credentials
+# -------------------------
+# Pick ONE provider and fill in the required keys.
+
+# OpenAI
+OPENAI_API_KEY=
+OPENAI_BASE_URL= # Optional: for custom endpoints or local LLMs e.g. http://localhost:11434/v1
+
+# Google
+GOOGLE_API_KEY=
+
+# OpenRouter
+OPENROUTER_API_KEY=
+OPENROUTER_BASE_URL= # Optional: Defaults to https://openrouter.ai/api/v1
+
+# -------------------------
+# Tool-specific API Keys
+# -------------------------
+
+# MedicalRAGTool (Optional)
+# Requires a Cohere account for embeddings and a Pinecone account for the vector database.
+COHERE_API_KEY=
+PINECONE_API_KEY=
+
+# WebBrowserTool (Optional)
+# Requires Google Custom Search API credentials.
+GOOGLE_SEARCH_API_KEY=
+GOOGLE_SEARCH_ENGINE_ID=
 ```
 
 ### Getting Started
@@ -232,6 +268,68 @@ ChestXRayGeneratorTool(
   1. Contact authors: https://github.com/StanfordMIMI/RoentGen
   2. Place weights in `{model_dir}/roentgen`
   3. Optional tool, can be excluded if not needed
+
+### Knowledge Base Setup (MedicalRAGTool)
+
+The `MedicalRAGTool` uses a Pinecone vector database to store and retrieve medical knowledge. To use this tool, you need to set up a Pinecone account and a Cohere account.
+
+1.  **Create a Pinecone Account**:
+    *   Sign up for a free account at [pinecone.io](https://www.pinecone.io/).
+
+2.  **Create a Pinecone Index**:
+    *   In your Pinecone project, create a new index with the following settings:
+        *   **Index Name**: `medrax` (or match the `pinecone_index_name` in `main.py`)
+        *   **Dimensions**: `1536` (for Cohere's `embed-english-v3.0` model)
+        *   **Metric**: `cosine`
+
+3.  **Get API Credentials**:
+    *   From the Pinecone dashboard, find your **API Key**.
+    *   Sign up for a free Cohere account at [cohere.com](https://cohere.com/) and get your **Trial API Key**.
+
+4.  **Set Environment Variables**:
+    *   Set your API keys in the `.env` file at the root of the project. Refer to the **Environment Variable Setup** section for a complete template and instructions.
+
+5.  **Data Format Requirements**:
+    
+    The RAG system can load documents from two sources:
+    
+    **Local Documents**: Place PDF, TXT, or DOCX files in a directory (default: `rag_docs/`)
+    
+    **HuggingFace Datasets**: Must follow this exact schema:
+    ```json
+    {
+      "id": "unique_identifier_for_chunk",
+      "title": "Document Title", 
+      "content": "Text content of the chunk..."
+    }
+    ```
+    
+    **Converting PDFs to HuggingFace Format**:
+    
+    Use the provided conversion scripts in the `scripts/` directory:
+    ```bash
+    # Convert PDF files to HuggingFace parquet format
+    python scripts/pdf_to_hf_dataset.py \
+        --input_dir /path/to/your/pdfs \
+        --output_dir /path/to/output \
+        --format parquet \
+        --chunk_size 1000 \
+        --chunk_overlap 100
+    
+    **Configuration Example**:
+    ```python
+    rag_config = RAGConfig(
+        model="command-r-plus",
+        embedding_model="embed-v4.0", 
+        pinecone_index_name="medrax",
+        local_docs_dir="rag_docs/",  # Local PDFs/docs
+        huggingface_datasets=["your-username/medical-textbooks"],  # HF datasets
+        chunk_size=1000,
+        chunk_overlap=100,
+        retriever_k=7
+    )
+    ```
+
 <br>
 
 ## Configuration Notes
@@ -248,55 +346,32 @@ ChestXRayGeneratorTool(
 <br>
 
 ### Language Model Options
-MedRAX supports multiple language model providers:
+MedRAX supports multiple language model providers. Configure your API keys in the `.env` file as described in the **Environment Variable Setup** section.
 
 #### OpenAI Models
 Supported prefixes: `gpt-` and `chatgpt-`
-```
-export OPENAI_API_KEY="your-openai-api-key"
-export OPENAI_BASE_URL="https://api.openai.com/v1"  # Optional for custom endpoints
-```
 
 #### Google Gemini Models
 Supported prefix: `gemini-`
-```
-export GOOGLE_API_KEY="your-google-api-key"
-```
 
 #### OpenRouter Models (Open Source & Proprietary)
 Supported prefix: `openrouter-`
 
-Access many open source and proprietary models via [OpenRouter](https://openrouter.ai/):
-```
-export OPENROUTER_API_KEY="your-openrouter-api-key"
-```
+Access many open source and proprietary models via [OpenRouter](https://openrouter.ai/).
 
 **Note:** Tool compatibility may vary with open-source models. For best results with tools, we recommend using OpenAI or Google Gemini models.
 
 #### Local LLMs
-If you are running a local LLM using frameworks like [Ollama](https://ollama.com/) or [LM Studio](https://lmstudio.ai/), you need to configure your environment variables accordingly. For example:
-```
-export OPENAI_BASE_URL="http://localhost:11434/v1"
-export OPENAI_API_KEY="ollama"
-```
+If you are running a local LLM using frameworks like [Ollama](https://ollama.com/) or [LM Studio](https://lmstudio.ai/), you can configure the `OPENAI_BASE_URL` in your `.env` file to point to your local endpoint (e.g., `http://localhost:11434/v1`).
 
 #### Tool-Specific Configuration
 
-**WebBrowserTool**: Requires Google Custom Search API credentials:
-```bash
-export GOOGLE_SEARCH_API_KEY="your-google-search-api-key"
-export GOOGLE_SEARCH_ENGINE_ID="your-google-search-engine-id"
-```
+**WebBrowserTool**: Requires Google Custom Search API credentials, which can be set in the `.env` file.
 
 **PythonSandboxTool**: Requires Deno runtime installation:
 ```bash
 # Verify Deno is installed
 deno --version
-
-# If not installed, install using:
-curl -fsSL https://deno.land/install.sh | sh  # macOS/Linux
-# or
-irm https://deno.land/install.ps1 | iex       # Windows PowerShell
 ```
 
 **Custom Python Sandbox Configuration**:

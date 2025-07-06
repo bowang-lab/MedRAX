@@ -71,6 +71,7 @@ class Agent:
         system_prompt: str = "",
         log_tools: bool = True,
         log_dir: Optional[str] = "logs",
+        debug: bool = False,
     ):
         """
         Initialize the Agent.
@@ -82,6 +83,7 @@ class Agent:
             system_prompt (str, optional): System instructions. Defaults to "".
             log_tools (bool, optional): Whether to log tool calls. Defaults to True.
             log_dir (str, optional): Directory to save logs. Defaults to 'logs'.
+            debug (bool, optional): Whether to enable debug mode. Defaults to False.
         """
         self.system_prompt = system_prompt
         self.log_tools = log_tools
@@ -96,5 +98,6 @@ class Agent:
             checkpointer=checkpointer,
             state_schema=State,
             prompt=system_prompt if system_prompt else None,
+            debug=debug,
         )
         self.tools = {t.name: t for t in tools}
