@@ -149,12 +149,12 @@ if __name__ == "__main__":
         model="command-r-plus",  # ✅ Chat model for generating responses
         embedding_model="embed-v4.0",  # Set COHERE_API_KEY in .env
         temperature=0.3,
-        pinecone_index_name="medrax",  # Name for the Pinecone index
+        pinecone_index_name="medrax2",  # Name for the Pinecone index
         chunk_size=1500,
         chunk_overlap=300,
         retriever_k=7,
-        local_docs_dir="medrax/rag/docs",  # Change this to the path of the documents for RAG
-        huggingface_datasets=["VictorLJZ/medrax"],  # List of HuggingFace datasets to load
+        local_docs_dir="rag_docs",  # Change this to the path of the documents for RAG
+        huggingface_datasets=["VictorLJZ/medrax2"],  # List of HuggingFace datasets to load
         dataset_split="train",  # Which split of the datasets to use
     )
 

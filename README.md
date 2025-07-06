@@ -235,6 +235,47 @@ The `MedicalRAGTool` uses a Pinecone vector database to store and retrieve medic
     COHERE_API_KEY="YOUR_COHERE_API_KEY"
     ```
 
+5.  **Data Format Requirements**:
+    
+    The RAG system can load documents from two sources:
+    
+    **Local Documents**: Place PDF, TXT, or DOCX files in a directory (default: `rag_docs/`)
+    
+    **HuggingFace Datasets**: Must follow this exact schema:
+    ```json
+    {
+      "id": "unique_identifier_for_chunk",
+      "title": "Document Title", 
+      "content": "Text content of the chunk..."
+    }
+    ```
+    
+    **Converting PDFs to HuggingFace Format**:
+    
+    Use the provided conversion scripts in the `scripts/` directory:
+    ```bash
+    # Convert PDF files to HuggingFace parquet format
+    python scripts/pdf_to_hf_dataset.py \
+        --input_dir /path/to/your/pdfs \
+        --output_dir /path/to/output \
+        --format parquet \
+        --chunk_size 1000 \
+        --chunk_overlap 100
+    
+    **Configuration Example**:
+    ```python
+    rag_config = RAGConfig(
+        model="command-r-plus",
+        embedding_model="embed-v4.0", 
+        pinecone_index_name="medrax",
+        local_docs_dir="rag_docs/",  # Local PDFs/docs
+        huggingface_datasets=["your-username/medical-textbooks"],  # HF datasets
+        chunk_size=1000,
+        chunk_overlap=100,
+        retriever_k=7
+    )
+    ```
+
 <br>
 
 ## Configuration Notes

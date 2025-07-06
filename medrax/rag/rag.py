@@ -23,70 +23,6 @@ from datasets import load_dataset
 from tqdm import tqdm
 
 
-class TimeoutError(Exception):
-    """Custom timeout exception"""
-    pass
-
-
-@contextmanager
-def timeout(seconds):
-    """Context manager for timing out operations"""
-    def timeout_handler(signum, frame):
-        raise TimeoutError(f"Operation timed out after {seconds} seconds")
-    
-    # Set the signal handler
-    old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-    signal.alarm(seconds)
-    
-    try:
-        yield
-    finally:
-        # Restore the old signal handler
-        signal.signal(signal.SIGALRM, old_handler)
-        signal.alarm(0)
-
-
-def safe_extract_pdf_text(pdf_data, timeout_seconds=180):
-    """Safely extract text from PDF with timeout and fallback handling"""
-    try:
-        with timeout(timeout_seconds):
-            if isinstance(pdf_data, str):
-                return pdf_data, {"file_type": "pdf"}
-            elif hasattr(pdf_data, 'pages'):
-                # pdfplumber PDF object
-                pdf_text = ""
-                num_pages = len(pdf_data.pages)
-                
-                for page in pdf_data.pages:
-                    text = page.extract_text()
-                    if text:
-                        pdf_text += text + "\n"
-                
-                # Close the PDF to free resources
-                pdf_data.close()
-                
-                return pdf_text.strip(), {"file_type": "pdf", "num_pages": num_pages}
-            else:
-                return None, None
-                
-    except TimeoutError:
-        print(f"PDF processing timed out after {timeout_seconds} seconds")
-        try:
-            if hasattr(pdf_data, 'close'):
-                pdf_data.close()
-        except:
-            pass
-        return None, None
-    except Exception as e:
-        print(f"Error in PDF processing: {str(e)}")
-        try:
-            if hasattr(pdf_data, 'close'):
-                pdf_data.close()
-        except:
-            pass
-        return None, None
-
-
 class RAGConfig(BaseModel):
     """Configuration class for RAG (Retrieval Augmented Generation) system.
 
@@ -112,7 +48,7 @@ class RAGConfig(BaseModel):
     retriever_k: int = Field(default=5)
     chunk_size: int = Field(default=1000)
     chunk_overlap: int = Field(default=200)
-    local_docs_dir: str = Field(default="medrax/rag/docs")
+    local_docs_dir: str = Field(default="rag_docs")
     huggingface_datasets: List[str] = Field(default_factory=lambda: ["MedRAG/textbooks"])
     dataset_split: str = Field(default="train")
 
@@ -183,65 +119,37 @@ class CohereRAG:
         # Create or update Pinecone index and get the vectorstore
         self.vectorstore = self.get_or_create_vectorstore()
 
-    def load_directory(self, directory_path: str) -> List[Document]:
-        """Load and split all .txt files from a directory into documents.
+    def initialize_rag(self, with_memory: bool = False) -> RetrievalQA:
+        """Initialize RAG chain with optional conversation memory.
 
         Args:
-            directory_path (str): Path to directory containing text files
+            with_memory (bool): Whether to include conversation memory
 
         Returns:
-            List[Document]: List of processed documents
+            RetrievalQA: Configured RAG chain
 
         Raises:
-            ValueError: If directory does not exist
+            ValueError: If vectorstore not initialized
         """
-        documents = []
-        directory = Path(directory_path)
+        if self.vectorstore is None:
+            raise ValueError("Vectorstore not initialized. Please add documents first.")
 
-        if not directory.exists():
-            raise ValueError(f"Directory {directory_path} does not exist")
+        # Create custom retriever
+        retriever = RerankingRetriever(self.get_relevant_documents)
 
-        # Configure text splitter
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=self.config.chunk_size,
-            chunk_overlap=self.config.chunk_overlap,
-            length_function=len,
-        )
+        # Configure chain parameters
+        chain_kwargs = {
+            "llm": self.chat_model,
+            "chain_type": "stuff",
+            "retriever": retriever,
+            "return_source_documents": True,
+            "verbose": True,
+        }
 
-        # Process each document file (txt, pdf, docx)
-        for file_pattern in ["**/*.txt", "**/*.pdf", "**/*.docx"]:
-            for file_path in directory.glob(file_pattern):
-                try:
-                    # Select appropriate loader based on file extension
-                    if file_path.suffix.lower() == ".txt":
-                        loader = TextLoader(str(file_path))
-                    elif file_path.suffix.lower() == ".pdf":
-                        loader = PyPDFLoader(str(file_path))
-                    elif file_path.suffix.lower() == ".docx":
-                        loader = Docx2txtLoader(str(file_path))
+        if with_memory:
+            chain_kwargs["memory"] = self.memory
 
-                    docs = loader.load()
-
-                    # Split documents first
-                    split_docs = text_splitter.split_documents(docs)
-
-                    # Add metadata to each document
-                    metadata = {
-                        "source": str(file_path),
-                        "created_at": os.path.getctime(file_path),
-                        "file_type": file_path.suffix.lower()[1:],
-                    }
-
-                    for doc in split_docs:
-                        doc.metadata.update(metadata)
-
-                    documents.extend(split_docs)
-                    print(f"Loaded and split: {file_path}")
-
-                except Exception as e:
-                    print(f"Error loading {file_path}: {str(e)}")
-
-        return documents
+        return RetrievalQA.from_chain_type(**chain_kwargs)
 
     def get_or_create_vectorstore(self) -> PineconeVectorStore:
         """
@@ -312,6 +220,13 @@ class CohereRAG:
         """Collect documents from all enabled sources."""
         all_documents = []
         
+       # Load local documents
+        if os.path.exists(self.local_docs_dir):
+            print(f"Loading documents from local directory: {self.local_docs_dir}")
+            local_docs = self.load_directory(self.local_docs_dir)
+            all_documents.extend(local_docs)
+            print(f"Loaded {len(local_docs)} documents from local directory")
+         
         # Load HuggingFace datasets
         for dataset_name in self.config.huggingface_datasets:
             print(f"Loading documents from HuggingFace dataset: {dataset_name}...")
@@ -322,18 +237,106 @@ class CohereRAG:
             except Exception as e:
                 print(f"Error loading dataset {dataset_name}: {str(e)}")
                 continue
-
-        # Load local documents
-        if os.path.exists(self.local_docs_dir):
-            print(f"Loading documents from local directory: {self.local_docs_dir}")
-            local_docs = self.load_directory(self.local_docs_dir)
-            all_documents.extend(local_docs)
-            print(f"Loaded {len(local_docs)} documents from local directory")
         
         if not all_documents:
             print("Warning: No documents loaded. Please check your configuration.")
             
         return all_documents
+
+    def load_directory(self, directory_path: str) -> List[Document]:
+        """Load and split all .txt files from a directory into documents.
+
+        Args:
+            directory_path (str): Path to directory containing text files
+
+        Returns:
+            List[Document]: List of processed documents
+
+        Raises:
+            ValueError: If directory does not exist
+        """
+        documents = []
+        directory = Path(directory_path)
+
+        if not directory.exists():
+            raise ValueError(f"Directory {directory_path} does not exist")
+
+        # Configure text splitter
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=self.config.chunk_size,
+            chunk_overlap=self.config.chunk_overlap,
+            length_function=len,
+        )
+
+        # Process each document file (txt, pdf, docx)
+        for file_pattern in ["**/*.txt", "**/*.pdf", "**/*.docx"]:
+            for file_path in directory.glob(file_pattern):
+                try:
+                    # Select appropriate loader based on file extension
+                    if file_path.suffix.lower() == ".txt":
+                        loader = TextLoader(str(file_path))
+                    elif file_path.suffix.lower() == ".pdf":
+                        loader = PyPDFLoader(str(file_path))
+                    elif file_path.suffix.lower() == ".docx":
+                        loader = Docx2txtLoader(str(file_path))
+
+                    docs = loader.load()
+
+                    # Split documents first
+                    split_docs = text_splitter.split_documents(docs)
+
+                    # Add metadata to each document
+                    metadata = {
+                        "source": str(file_path),
+                        "created_at": os.path.getctime(file_path),
+                        "file_type": file_path.suffix.lower()[1:],
+                    }
+
+                    for doc in split_docs:
+                        doc.metadata.update(metadata)
+
+                    documents.extend(split_docs)
+                    print(f"Loaded and split: {file_path}")
+
+                except Exception as e:
+                    print(f"Error loading {file_path}: {str(e)}")
+
+        return documents
+
+    def load_huggingface_dataset(self, dataset_name: str, split: str) -> List[Document]:
+        """Load MedRAG textbooks dataset from Hugging Face.
+
+        Returns:
+            List[Document]: List of processed documents from MedRAG textbooks
+
+        Raises:
+            ValueError: If unable to load the dataset
+        """
+        try:
+            print(f"Loading HuggingFace dataset: {dataset_name}...")
+            dataset = load_dataset(dataset_name, split=split)
+            documents = []
+
+            for item in tqdm(
+                dataset, desc=f"Processing HuggingFace dataset: {dataset_name}", total=len(dataset), unit="chunk"
+            ):
+                # Create a Document object for each textbook snippet
+                doc = Document(
+                    page_content=item["content"],
+                    metadata={
+                        "source": f"{dataset_name}",
+                        "id": item["id"],
+                        "title": item["title"],
+                    },
+                )
+                documents.append(doc)
+
+            print(f"Loaded {len(documents)} document chunks from HuggingFace dataset: {dataset_name}")
+            return documents
+
+        except Exception as e:
+            print(f"Error loading HuggingFace dataset: {dataset_name}: {str(e)}")
+            raise ValueError(f"Failed to load HuggingFace dataset: {dataset_name}: {str(e)}")
 
     def get_relevant_documents(self, query: str) -> List[Document]:
         """Get relevant documents using vector similarity and reranking.
@@ -352,290 +355,3 @@ class CohereRAG:
 
         # Return top k documents after reranking
         return [docs[result["index"]] for result in reranked[: self.config.retriever_k]]
-
-    def initialize_rag(self, with_memory: bool = False) -> RetrievalQA:
-        """Initialize RAG chain with optional conversation memory.
-
-        Args:
-            with_memory (bool): Whether to include conversation memory
-
-        Returns:
-            RetrievalQA: Configured RAG chain
-
-        Raises:
-            ValueError: If vectorstore not initialized
-        """
-        if self.vectorstore is None:
-            raise ValueError("Vectorstore not initialized. Please add documents first.")
-
-        # Create custom retriever
-        retriever = RerankingRetriever(self.get_relevant_documents)
-
-        # Configure chain parameters
-        chain_kwargs = {
-            "llm": self.chat_model,
-            "chain_type": "stuff",
-            "retriever": retriever,
-            "return_source_documents": True,
-            "verbose": True,
-        }
-
-        if with_memory:
-            chain_kwargs["memory"] = self.memory
-
-        return RetrievalQA.from_chain_type(**chain_kwargs)
-
-    def load_huggingface_dataset(self, dataset_name: str, split: str = "train") -> List[Document]:
-        """Load dataset from Hugging Face with batch processing for memory efficiency.
-
-        Args:
-            dataset_name (str): Name of the dataset on Hugging Face (e.g., "MedRAG/textbooks", "VictorLJZ/medrax")
-            split (str): Dataset split to load (default: "train")
-
-        Returns:
-            List[Document]: List of processed documents from the dataset
-
-        Raises:
-            ValueError: If unable to load the dataset
-        """
-        try:
-            print(f"Loading {dataset_name} dataset from Hugging Face...")
-            
-            # Special handling for PDF-heavy datasets
-            is_pdf_dataset = "medrax" in dataset_name.lower()
-            batch_size = 20 if is_pdf_dataset else 100  # Smaller batches for PDF datasets
-            
-            # Load dataset
-            dataset = load_dataset(dataset_name, split=split, trust_remote_code=True)
-            
-            # Configure text splitter
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=self.config.chunk_size,
-                chunk_overlap=self.config.chunk_overlap,
-                length_function=len,
-            )
-            
-            # Track progress
-            successfully_processed = 0
-            failed_items = 0
-            timeout_failures = 0
-            extraction_failures = 0
-            failed_pdfs = []  # Track details of failed PDFs
-            all_documents = []
-            total_items = len(dataset)
-            
-            print(f"Processing {total_items} items in batches of {batch_size}...")
-            print(f"PDF processing timeout set to 30 seconds per PDF")
-            
-            # Process in batches
-            for batch_start in range(0, total_items, batch_size):
-                batch_end = min(batch_start + batch_size, total_items)
-                batch_num = (batch_start // batch_size) + 1
-                total_batches = (total_items + batch_size - 1) // batch_size
-                
-                print(f"\nProcessing batch {batch_num}/{total_batches} (items {batch_start}-{batch_end-1})...")
-                
-                batch_documents = []
-                batch_failed = 0
-                
-                # Process items in this batch
-                for idx in range(batch_start, batch_end):
-                    try:
-                        item = dataset[idx]
-                        content = None
-                        item_metadata = {
-                            "source": f"{dataset_name}",
-                            "dataset": dataset_name,
-                            "split": split,
-                            "item_index": idx,
-                        }
-                        
-                        # Extract identifying information for better tracking
-                        item_identifier = f"Index {idx}"
-                        if "title" in item:
-                            item_identifier += f" - Title: {item['title']}"
-                        elif "id" in item:
-                            item_identifier += f" - ID: {item['id']}"
-                        elif "name" in item:
-                            item_identifier += f" - Name: {item['name']}"
-                        elif "filename" in item:
-                            item_identifier += f" - File: {item['filename']}"
-                        
-                        # Try to extract first few words from content as identifier
-                        content_preview = None
-                        if "content" in item:
-                            content_preview = item["content"]
-                        elif "text" in item:
-                            content_preview = item["text"]
-                        
-                        if content_preview and len(str(content_preview).split()) > 0:
-                            item_identifier += f" - Preview: {str(content_preview).split()[:5]}..."
-                        
-                        print(f"Processing item {item_identifier}...")
-                        
-                        # Handle different dataset structures
-                        if "content" in item:
-                            content = item["content"]
-                        elif "text" in item:
-                            content = item["text"]
-                        elif "pdf" in item and item["pdf"] is not None:
-                            # Use safe PDF extraction with timeout
-                            pdf_data = item["pdf"]
-                            
-                            print(f"Processing PDF at index {idx}...")
-                            content, pdf_metadata = safe_extract_pdf_text(pdf_data, timeout_seconds=180)
-                            
-                            # Try to get a content preview for identification
-                            if content and len(content.strip()) > 0:
-                                preview_words = content.strip().split()[:8]
-                                content_preview = " ".join(preview_words) + "..." if len(preview_words) >= 8 else " ".join(preview_words)
-                                item_identifier += f" - Content: {content_preview}"
-                            
-                            if content is None:
-                                print(f"Failed to extract text from PDF at index {idx} - skipping")
-                                failed_items += 1
-                                batch_failed += 1
-                                timeout_failures += 1
-                                failed_pdfs.append({
-                                    "index": idx,
-                                    "identifier": item_identifier,
-                                    "reason": "timeout",
-                                    "details": "PDF processing timed out after 180 seconds"
-                                })
-                                continue
-                            
-                            if not content.strip():
-                                print(f"Warning: No text extracted from PDF at index {idx} - skipping")
-                                failed_items += 1
-                                batch_failed += 1
-                                extraction_failures += 1
-                                failed_pdfs.append({
-                                    "index": idx,
-                                    "identifier": item_identifier,
-                                    "reason": "no_text",
-                                    "details": "No text could be extracted from PDF"
-                                })
-                                continue
-                            
-                            # Add PDF metadata
-                            if pdf_metadata:
-                                item_metadata.update(pdf_metadata)
-                        else:
-                            # Try to find text fields
-                            text_fields = [k for k in item.keys() if isinstance(item[k], str) and len(str(item[k])) > 50]
-                            if text_fields:
-                                content = item[text_fields[0]]
-                            else:
-                                print(f"Warning: Could not find text content in item {idx}")
-                                failed_items += 1
-                                batch_failed += 1
-                                extraction_failures += 1
-                                failed_pdfs.append({
-                                    "index": idx,
-                                    "identifier": item_identifier,
-                                    "reason": "no_content",
-                                    "details": f"No text fields found in item keys: {list(item.keys())}"
-                                })
-                                continue
-
-                        if not content:
-                            failed_items += 1
-                            batch_failed += 1
-                            failed_pdfs.append({
-                                "index": idx,
-                                "identifier": item_identifier,
-                                "reason": "empty_content",
-                                "details": "Content was empty after processing"
-                            })
-                            continue
-                            
-                        # Add additional metadata
-                        for key, value in item.items():
-                            if key not in ["content", "text", "pdf"] and isinstance(value, (str, int, float, bool)):
-                                item_metadata[key] = value
-
-                        # Split long documents into chunks
-                        if len(content) > self.config.chunk_size * 1.5:
-                            temp_doc = Document(page_content=content, metadata=item_metadata)
-                            split_docs = text_splitter.split_documents([temp_doc])
-                            
-                            for i, doc in enumerate(split_docs):
-                                doc.metadata["chunk_index"] = i
-                                doc.metadata["total_chunks"] = len(split_docs)
-                            
-                            batch_documents.extend(split_docs)
-                        else:
-                            doc = Document(
-                                page_content=content,
-                                metadata=item_metadata,
-                            )
-                            batch_documents.append(doc)
-
-                        successfully_processed += 1
-                        
-                    except Exception as e:
-                        print(f"Error processing item {idx}: {str(e)}")
-                        failed_items += 1
-                        batch_failed += 1
-                        failed_pdfs.append({
-                            "index": idx,
-                            "identifier": item_identifier,
-                            "reason": "exception",
-                            "details": f"Exception during processing: {str(e)}"
-                        })
-                        continue
-                
-                # Add batch documents to all documents
-                all_documents.extend(batch_documents)
-                batch_success = len(range(batch_start, batch_end)) - batch_failed
-                print(f"Batch {batch_num} complete: {len(batch_documents)} documents created from {batch_success} successful PDFs")
-                if batch_failed > 0:
-                    print(f"Batch {batch_num} failures: {batch_failed} PDFs failed to process")
-                
-                # Memory cleanup after each batch
-                if is_pdf_dataset:
-                    print("Performing memory cleanup...")
-                    del batch_documents
-                    gc.collect()
-                    
-                    # Give a brief pause for system cleanup
-                    time.sleep(1)
-                    
-                    # Report memory usage
-                    if hasattr(sys, 'getsizeof'):
-                        try:
-                            mem_mb = sys.getsizeof(all_documents) / 1024 / 1024
-                            print(f"Current document memory usage: {mem_mb:.1f} MB")
-                        except:
-                            pass
-
-            print(f"\n{'='*60}")
-            print(f"Dataset processing complete!")
-            print(f"{'='*60}")
-            print(f"Total documents created: {len(all_documents)}")
-            print(f"Successfully processed: {successfully_processed} items")
-            print(f"Failed items: {failed_items}")
-            print(f"  - Timeout failures: {timeout_failures}")
-            print(f"  - Extraction failures: {extraction_failures}")
-            print(f"  - Other failures: {failed_items - timeout_failures - extraction_failures}")
-            print(f"Success rate: {successfully_processed/(successfully_processed + failed_items)*100:.1f}%")
-            
-            # Display details of failed PDFs
-            if failed_pdfs:
-                print(f"\n{'='*60}")
-                print(f"FAILED PDF DETAILS:")
-                print(f"{'='*60}")
-                for i, failed_pdf in enumerate(failed_pdfs, 1):
-                    print(f"{i}. {failed_pdf['identifier']}")
-                    print(f"   Reason: {failed_pdf['reason'].upper()}")
-                    print(f"   Details: {failed_pdf['details']}")
-                    if i < len(failed_pdfs):
-                        print()
-            
-            print(f"{'='*60}")
-            
-            return all_documents
-
-        except Exception as e:
-            print(f"Error loading {dataset_name}: {str(e)}")
-            raise ValueError(f"Failed to load dataset {dataset_name}: {str(e)}")
