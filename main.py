@@ -149,7 +149,8 @@ if __name__ == "__main__":
     # This allows the agent to access and use medical knowledge documents
     rag_config = RAGConfig(
         model="command-a-03-2025",  # Chat model for generating responses
-        embedding_model="embed-v4.0",  # Set COHERE_API_KEY in .env
+        embedding_model="embed-v4.0",  # Embedding model for the RAG system
+        rerank_model="rerank-v3.5",  # Reranking model for the RAG system
         temperature=0.3,
         pinecone_index_name="medrax2",  # Name for the Pinecone index
         chunk_size=1500,
