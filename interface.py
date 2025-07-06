@@ -229,6 +229,33 @@ class ChatInterface:
                                             yield chat_history, self.display_file_path, ""
                                     except (json.JSONDecodeError, TypeError):
                                         pass
+                                        
+                                elif tool_name == "medsam2_segmentation":
+                                    try:
+                                        result = json.loads(msg.content)
+                                        # Handle both single dict and potential list format
+                                        if isinstance(result, list) and len(result) > 0:
+                                            result = result[0]
+                                        
+                                        if isinstance(result, dict):
+                                            # Look for visualization path in multiple possible keys
+                                            viz_path = None
+                                            for key in ["visualization_path", "image_path", "segmentation_image_path"]:
+                                                if key in result:
+                                                    viz_path = result[key]
+                                                    break
+                                            
+                                            if viz_path:
+                                                self.display_file_path = viz_path
+                                                chat_history.append(
+                                                    ChatMessage(
+                                                        role="assistant",
+                                                        content={"path": self.display_file_path},
+                                                    )
+                                                )
+                                                yield chat_history, self.display_file_path, ""
+                                    except (json.JSONDecodeError, TypeError):
+                                        pass
 
         except Exception as e:
             chat_history.append(
