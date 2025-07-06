@@ -84,8 +84,13 @@ def initialize_agent(
         "DicomProcessorTool": lambda: DicomProcessorTool(temp_dir=temp_dir),
         "MedicalRAGTool": lambda: RAGTool(config=rag_config),
         "WebBrowserTool": lambda: WebBrowserTool(),
-        "PythonSandboxTool": lambda: create_python_sandbox(),
     }
+
+    try:
+        tools_dict["PythonSandboxTool"] = create_python_sandbox()
+    except Exception as e:
+        print(f"Error creating PythonSandboxTool: {e}")
+        print("Skipping PythonSandboxTool")
 
     # Initialize only selected tools or all if none specified
     tools_dict: Dict[str, BaseTool] = {}
