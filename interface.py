@@ -291,7 +291,7 @@ def create_demo(agent, tools_dict):
                 with gr.Column(scale=5):
                     chatbot = gr.Chatbot(
                         [],
-                        height=1000,
+                        height=800,
                         container=True,
                         show_label=True,
                         elem_classes="chat-box",
