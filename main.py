@@ -84,6 +84,7 @@ def initialize_agent(
         "DicomProcessorTool": lambda: DicomProcessorTool(temp_dir=temp_dir),
         "MedicalRAGTool": lambda: RAGTool(config=rag_config),
         "WebBrowserTool": lambda: WebBrowserTool(),
+        "PythonSandboxTool": lambda: create_python_sandbox(),
     }
 
     # Initialize only selected tools or all if none specified
@@ -141,12 +142,13 @@ if __name__ == "__main__":
         # "ChestXRayGeneratorTool",  # For generating synthetic chest X-rays
         "WebBrowserTool",  # For web browsing and search capabilities
         "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
+        "PythonSandboxTool",  # Add the Python sandbox tool
     ]
 
     # Configure the Retrieval Augmented Generation (RAG) system
     # This allows the agent to access and use medical knowledge documents
     rag_config = RAGConfig(
-        model="command-r-plus",  # ✅ Chat model for generating responses
+        model="command-a-03-2025",  # Chat model for generating responses
         embedding_model="embed-v4.0",  # Set COHERE_API_KEY in .env
         temperature=0.3,
         pinecone_index_name="medrax2",  # Name for the Pinecone index
@@ -175,7 +177,7 @@ if __name__ == "__main__":
         model_dir="/model-weights",
         temp_dir="temp",  # Change this to the path of the temporary directory
         device="cuda",
-        model="gpt-4o",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
+        model="gpt-4.1-2025-04-14",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
         temperature=0.7,
         top_p=0.95,
         model_kwargs=model_kwargs,

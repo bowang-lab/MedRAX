@@ -28,6 +28,7 @@ MedRAX is built on a robust technical foundation:
 - **Disease Classification**: Leverages DenseNet-121 from TorchXRayVision for detecting 18 pathology classes
 - **X-ray Generation**: Utilizes RoentGen for synthetic CXR generation
 - **Web Browser**: Provides web search capabilities and URL content retrieval using Google Custom Search API
+- **Python Sandbox**: Executes Python code in a secure, stateful sandbox environment using `langchain-sandbox` and Pyodide. Supports custom data analysis, calculations, and dynamic package installations. Pre-configured with medical analysis packages including pandas, numpy, pydicom, SimpleITK, scikit-image, Pillow, scikit-learn, matplotlib, seaborn, and openpyxl. **Requires Deno runtime.**
 - **Utilities**: Includes DICOM processing, visualization tools, and custom plotting capabilities
 <br><br>
 
@@ -70,6 +71,14 @@ python quickstart.py \
 ## Installation
 ### Prerequisites
 - Python 3.8+
+- [Deno](https://docs.deno.com/runtime/getting_started/installation/): Required for the Python Sandbox tool. Install using:
+  ```bash
+  # macOS/Linux
+  curl -fsSL https://deno.land/install.sh | sh
+  
+  # Windows (PowerShell)
+  irm https://deno.land/install.ps1 | iex
+  ```
 - CUDA/GPU for best performance
 
 ### Installation Steps
@@ -107,6 +116,8 @@ selected_tools = [
     "TorchXRayVisionClassifierTool",  # Renamed from ChestXRayClassifierTool
     "ArcPlusClassifierTool",          # New ArcPlus classifier
     "ChestXRaySegmentationTool",
+    "PythonSandboxTool",              # Python code execution
+    "WebBrowserTool",                 # Web search and URL access
     # Add or remove tools as needed
 ]
 
@@ -184,6 +195,19 @@ XRayVQATool(
 ```
 Support for MedSAM segmentation will be added in a future update.
 ```
+
+### Python Sandbox Tool
+```python
+# Tool name for selection: "PythonSandboxTool" 
+# Implementation: create_python_sandbox() -> PyodideSandboxTool
+create_python_sandbox()  # Returns configured PyodideSandboxTool instance
+```
+- **Stateful execution**: Variables, functions, and imports persist between calls
+- **Pre-installed packages**: Common medical analysis packages (pandas, numpy, pydicom, SimpleITK, scikit-image, Pillow, scikit-learn, matplotlib, seaborn, openpyxl)
+- **Dynamic package installation**: Can install additional packages using `micropip`
+- **Network access**: Enabled for package installations from PyPI
+- **Secure sandbox**: Runs in isolated Pyodide environment
+- **Requires Deno**: Must have Deno runtime installed on host system
 
 ### Utility Tools
 No additional model weights required:
@@ -324,11 +348,35 @@ export OPENAI_BASE_URL="http://localhost:11434/v1"
 export OPENAI_API_KEY="ollama"
 ```
 
-#### WebBrowserTool Configuration
-If you're using the WebBrowserTool, you'll need to set these environment variables:
-```
+#### Tool-Specific Configuration
+
+**WebBrowserTool**: Requires Google Custom Search API credentials:
+```bash
 export GOOGLE_SEARCH_API_KEY="your-google-search-api-key"
 export GOOGLE_SEARCH_ENGINE_ID="your-google-search-engine-id"
+```
+
+**PythonSandboxTool**: Requires Deno runtime installation:
+```bash
+# Verify Deno is installed
+deno --version
+
+# If not installed, install using:
+curl -fsSL https://deno.land/install.sh | sh  # macOS/Linux
+# or
+irm https://deno.land/install.ps1 | iex       # Windows PowerShell
+```
+
+**Custom Python Sandbox Configuration**:
+```python
+from medrax.tools import create_python_sandbox
+
+# Create custom sandbox with additional packages
+custom_sandbox = create_python_sandbox(
+    pip_packages=["your-package", "another-package"],
+    stateful=True,  # Maintain state between calls
+    allow_net=True,  # Allow network access for package installation
+)
 ```
 <br>
 
