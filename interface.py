@@ -136,15 +136,15 @@ class ChatInterface:
                 {"messages": messages}, {"configurable": {"thread_id": self.current_thread_id}}
             ):
                 if isinstance(event, dict):
-                    if "process" in event:
-                        content = event["process"]["messages"][-1].content
+                    if "agent" in event:
+                        content = event["agent"]["messages"][-1].content
                         if content:
                             content = re.sub(r"temp/[^\s]*", "", content)
                             chat_history.append(ChatMessage(role="assistant", content=content))
                             yield chat_history, self.display_file_path, ""
 
-                    elif "execute" in event:
-                        for message in event["execute"]["messages"]:
+                    elif "tools" in event:
+                        for message in event["tools"]["messages"]:
                             tool_name = message.name
                             tool_result = eval(message.content)[0]
 
@@ -201,7 +201,7 @@ def create_demo(agent, tools_dict):
         with gr.Column():
             gr.Markdown(
                 """
-            # 🏥 MedRAX
+            # 🏥 MedRAX-2
             Medical Reasoning Agent for Chest X-ray
             """
             )
