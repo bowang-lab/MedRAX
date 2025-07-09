@@ -50,6 +50,9 @@ class MedSAM2Tool(BaseTool):
         "Supports interactive prompting with box coordinates, point clicks, or automatic segmentation. "
         "Can handle 2D medical images and 3D volumes. Returns segmentation masks and visualization overlays. "
         "Prompt types: 'box' with [x1,y1,x2,y2] coordinates, 'point' with [x,y] coordinates, or 'auto' for automatic. "
+        "Don't use auto segmentation for everything, try to use point or box prompts by estimating the coordinates of the object you want to segment."
+        "Think step by step and reason about the coordinates carefully, also consider the size of the image itself and the object in the image."
+        "Also be aware of the mirroring effect (e.g. the right lung is on the left side of the image, the left lung is on the right side of the image)."
         "Example: {'image_path': '/path/to/image.png', 'prompt_type': 'box', 'prompt_coords': [100,100,200,200]}"
     )
     args_schema: Type[BaseModel] = MedSAM2Input

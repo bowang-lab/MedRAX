@@ -22,7 +22,7 @@ MedRAX is built on a robust technical foundation:
 
 ### Integrated Tools
 - **Visual QA**: Utilizes CheXagent and LLaVA-Med for complex visual understanding and medical reasoning
-- **Segmentation**: Employs MedSAM and PSPNet model trained on ChestX-Det for precise anatomical structure identification
+- **Segmentation**: Employs MedSAM2 (advanced medical image segmentation) and PSPNet model trained on ChestX-Det for precise anatomical structure identification
 - **Grounding**: Uses Maira-2 for localizing specific findings in medical images
 - **Report Generation**: Implements SwinV2 Transformer trained on CheXpert Plus for detailed medical reporting
 - **Disease Classification**: Leverages DenseNet-121 from TorchXRayVision for detecting 18 pathology classes
@@ -227,10 +227,17 @@ XRayVQATool(
 ```
 - CheXagent weights download automatically
 
-### MedSAM Tool
+### MedSAM2 Tool
+```python
+MedSAM2Tool(
+    model_dir=model_dir, 
+    device=device, 
+    temp_dir=temp_dir
+)
 ```
-Support for MedSAM segmentation will be added in a future update.
-```
+- Advanced medical image segmentation using MedSAM2 (adapted from Meta's SAM2)
+- Supports interactive prompting with box coordinates, point clicks, or automatic segmentation
+- **Requires manual setup** - see setup instructions below
 
 ### Python Sandbox Tool
 ```python
@@ -255,6 +262,56 @@ WebBrowserTool()  # Requires Google Search API credentials
 <br>
 
 ## Manual Setup Required
+
+### MedSAM2 Tool
+```python
+MedSAM2Tool(
+    model_dir=model_dir, 
+    device=device, 
+    temp_dir=temp_dir,
+    model_cfg="sam2.1_hiera_t512.yaml",  # Optional: model configuration
+    checkpoint="MedSAM2_latest.pt"       # Optional: specific checkpoint
+)
+```
+
+**MedSAM2 Manual Setup Instructions:**
+
+1. **Clone MedSAM2 Repository**:
+   ```bash
+   cd model-weights
+   git clone https://github.com/bowang-lab/MedSAM2.git
+   cd MedSAM2
+   ```
+
+2. **Install Dependencies**:
+   ```bash
+   # Install PyTorch with CUDA support (adjust CUDA version as needed)
+   pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu124
+   
+   # Install MedSAM2 package
+   pip install -e ".[dev]"
+   ```
+
+3. **Download Model Checkpoints**:
+   ```bash
+   # Run the download script to get all MedSAM2 checkpoints
+   bash download.sh
+   ```
+   This downloads:
+   - `MedSAM2_latest.pt` (recommended) - Latest general-purpose model
+   - `MedSAM2_CTLesion.pt` - Specialized for CT lesion segmentation
+   - `MedSAM2_MRI_LiverLesion.pt` - Specialized for liver lesion MRI
+   - `MedSAM2_US_Heart.pt` - Specialized for heart ultrasound
+   - Additional EfficientTAM and SAM2 base checkpoints
+
+**Configuration Options:**
+- `model_cfg`: Model configuration file (default: `"sam2.1_hiera_t512.yaml"`)
+- `checkpoint`: Checkpoint file to use:
+  - `"MedSAM2_latest.pt"` - Best general-purpose model (recommended)
+  - `"MedSAM2_CTLesion.pt"` - For CT lesion segmentation
+  - `"MedSAM2_MRI_LiverLesion.pt"` - For liver MRI segmentation
+  - `"MedSAM2_US_Heart.pt"` - For heart ultrasound segmentation
+
 
 ### Image Generation Tool
 ```python
