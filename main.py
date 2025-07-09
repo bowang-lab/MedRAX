@@ -12,6 +12,8 @@ from langchain_openai import ChatOpenAI
 from interface import create_demo
 from medrax.agent import *
 from medrax.tools import *
+# Import the new tool
+from medrax.tools.automated_preliminary_report import AutomatedPreliminaryReportTool
 from medrax.utils import *
 
 warnings.filterwarnings("ignore")
@@ -65,6 +67,10 @@ def initialize_agent(
         ),
         "ImageVisualizerTool": lambda: ImageVisualizerTool(),
         "DicomProcessorTool": lambda: DicomProcessorTool(temp_dir=temp_dir),
+        # Add the new AutomatedPreliminaryReportTool
+        "AutomatedPreliminaryReportTool": lambda: AutomatedPreliminaryReportTool(
+            cache_dir=model_dir, device=device
+        ),
     }
 
     # Initialize only selected tools or all if none specified
@@ -105,9 +111,10 @@ if __name__ == "__main__":
         "ChestXRaySegmentationTool",
         "ChestXRayReportGeneratorTool",
         "XRayVQATool",
-        # "LlavaMedTool",
-        # "XRayPhraseGroundingTool",
-        # "ChestXRayGeneratorTool",
+        "LlavaMedTool", # Uncommented
+        "XRayPhraseGroundingTool", # Uncommented
+        "ChestXRayGeneratorTool", # Uncommented
+        "AutomatedPreliminaryReportTool", # Added new tool
     ]
 
     # Collect the ENV variables
