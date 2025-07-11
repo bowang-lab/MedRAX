@@ -3,12 +3,8 @@ from pathlib import Path
 import uuid
 import tempfile
 import numpy as np
-import torch
 import matplotlib.pyplot as plt
 from PIL import Image
-import cv2
-import sys
-import os
 
 from pydantic import BaseModel, Field
 from langchain_core.callbacks import (
@@ -16,6 +12,11 @@ from langchain_core.callbacks import (
     CallbackManagerForToolRun,
 )
 from langchain_core.tools import BaseTool
+
+from MedSAM2.sam2.build_sam import build_sam2
+from MedSAM2.sam2.sam2_image_predictor import SAM2ImagePredictor
+from huggingface_hub import hf_hub_download
+
 
 
 class MedSAM2Input(BaseModel):
@@ -44,7 +45,7 @@ class MedSAM2Tool(BaseTool):
     Supports interactive prompting with boxes, points, or automatic segmentation.
     """
 
-    name: str = "medsam2_segmentation"
+    name: str = "medsam2"
     description: str = (
         "Advanced medical image segmentation using MedSAM2 (Segment Anything Model 2 for Medical Images). "
         "Supports interactive prompting with box coordinates, point clicks, or automatic segmentation. "
@@ -57,47 +58,37 @@ class MedSAM2Tool(BaseTool):
     )
     args_schema: Type[BaseModel] = MedSAM2Input
 
+    device: Optional[str] = "cuda"
+    cache_dir: Path = None
+    temp_dir: Path = Path("temp")
     predictor: Any = None
-    device: str = "cuda"
-    temp_dir: Path = None
-    model_dir: Path = None
 
     def __init__(
         self,
-        model_dir: str,
         device: Optional[str] = "cuda",
+        cache_dir: str = "/model-weights",
         temp_dir: Optional[str] = None,
+        model_path: str = "wanglab/MedSAM2",
+        model_file: str = "MedSAM2_latest.pt",
         model_cfg: str = "sam2.1_hiera_t512.yaml",
-        checkpoint: str = "MedSAM2_latest.pt",
+        **kwargs,
     ):
         """Initialize the MedSAM2 tool."""
         super().__init__()
         self.device = device
-        self.model_dir = Path(model_dir)
+        self.cache_dir = Path(cache_dir)
         self.temp_dir = Path(temp_dir if temp_dir else tempfile.mkdtemp())
-        self.temp_dir.mkdir(exist_ok=True)
-
-        # Add MedSAM2 to Python path
-        medsam2_path = self.model_dir / "MedSAM2"
-        if medsam2_path.exists():
-            sys.path.insert(0, str(medsam2_path))
-        else:
-            raise FileNotFoundError(f"MedSAM2 not found at {medsam2_path}. Please run git clone in {model_dir}")
 
         try:
-            # Import MedSAM2 modules
-            from sam2.build_sam import build_sam2
-            from sam2.sam2_image_predictor import SAM2ImagePredictor
+            hf_hub_download(
+                repo_id=model_path,
+                filename=model_file,
+                local_dir=self.cache_dir,
+                local_dir_use_symlinks=False
+            )
 
-            # Build model
-            checkpoint_path = medsam2_path / "checkpoints" / checkpoint
-            
-            if not checkpoint_path.exists():
-                raise FileNotFoundError(f"Checkpoint not found at {checkpoint_path}. Please run download.sh")
-
-            # Build model using config path relative to sam2 package (MedSAM2 sets up Hydra config paths automatically)
             config_path = f"configs/{model_cfg.replace('.yaml', '')}"
-            sam2_model = build_sam2(config_path, str(checkpoint_path), device=device)
+            sam2_model = build_sam2(config_path, str(self.cache_dir / model_file), device=device)
             self.predictor = SAM2ImagePredictor(sam2_model)
             
             print(f"MedSAM2 model loaded successfully on {device}")

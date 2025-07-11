@@ -87,7 +87,7 @@ def initialize_agent(
         "MedicalRAGTool": lambda: RAGTool(config=rag_config),
         "WebBrowserTool": lambda: WebBrowserTool(),
         "MedSAM2Tool": lambda: MedSAM2Tool(
-            model_dir=model_dir, device=device, temp_dir=temp_dir
+            device=device, cache_dir=model_dir, temp_dir=temp_dir
         ),
     }
 
@@ -154,7 +154,7 @@ if __name__ == "__main__":
         "MedSAM2Tool",  # For advanced medical image segmentation using MedSAM2
         "WebBrowserTool",  # For web browsing and search capabilities
         "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
-        "PythonSandboxTool",  # Add the Python sandbox tool
+        # "PythonSandboxTool",  # Add the Python sandbox tool
     ]
 
     # Configure the Retrieval Augmented Generation (RAG) system
