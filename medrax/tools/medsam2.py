@@ -170,47 +170,55 @@ class MedSAM2Tool(BaseTool):
 
     def _create_visualization(self, image: np.ndarray, masks: np.ndarray, prompt_info: Dict) -> str:
         """Create visualization of segmentation results."""
-        plt.figure(figsize=(12, 8))
+        plt.figure(figsize=(10, 10))
         
-        # Display original image
-        plt.subplot(1, 2, 1)
-        plt.imshow(image)
-        plt.title("Original Image")
-        plt.axis('off')
+        # Convert RGB image to grayscale for background display
+        if len(image.shape) == 3:
+            # Convert RGB to grayscale using standard luminance formula
+            gray_image = 0.299 * image[:,:,0] + 0.587 * image[:,:,1] + 0.114 * image[:,:,2]
+        else:
+            gray_image = image
         
-        # Display segmentation overlay
-        plt.subplot(1, 2, 2)
-        plt.imshow(image)
+        # Display grayscale background
+        plt.imshow(
+            gray_image, cmap="gray", extent=[0, image.shape[1], image.shape[0], 0]
+        )
         
-        # Overlay masks
-        if len(masks) > 0:
-            # Use the best mask (first one returned by SAM2)
-            mask = masks[0]
-            # Convert mask to boolean and ensure proper shape
-            mask_bool = mask.astype(bool)
-            colored_mask = np.zeros((*mask_bool.shape, 4))
-            colored_mask[mask_bool] = [1, 0, 0, 0.5]  # Red with transparency
-            plt.imshow(colored_mask)
+        # Generate color palette for multiple masks
+        colors = plt.cm.rainbow(np.linspace(0, 1, len(masks)))
         
-        # Add prompt visualization
+        # Process and overlay each mask
+        for idx, (mask, color) in enumerate(zip(masks, colors)):
+            if mask.sum() > 0:
+                # Convert mask to boolean and ensure proper shape
+                mask_bool = mask.astype(bool)
+                colored_mask = np.zeros((*mask_bool.shape, 4))
+                colored_mask[mask_bool] = (*color[:3], 0.3)  # 30% transparency like segmentation tool
+                plt.imshow(
+                    colored_mask, extent=[0, image.shape[1], image.shape[0], 0]
+                )
+                
+                # Add legend entry for each mask
+                mask_label = f"Mask {idx + 1} (score: {prompt_info.get('scores', [0])[idx] if idx < len(prompt_info.get('scores', [])) else 0:.3f})"
+                plt.plot([], [], color=color, label=mask_label, linewidth=3)
+        
+        # Add prompt visualization with consistent styling
         if prompt_info.get('box') is not None:
             box = prompt_info['box'][0]
             x1, y1, x2, y2 = box
-            plt.plot([x1, x2, x2, x1, x1], [y1, y1, y2, y2, y1], 'g-', linewidth=2)
             plt.plot([x1, x2, x2, x1, x1], [y1, y1, y2, y2, y1], 'g-', linewidth=2, label='Box Prompt')
         
         if prompt_info.get('point') is not None:
             point = prompt_info['point'][0]
             plt.plot(point[0], point[1], 'go', markersize=10, label='Point Prompt')
         
-        plt.title("Segmentation Result")
-        plt.axis('off')
-        if prompt_info.get('box') is not None or prompt_info.get('point') is not None:
-            plt.legend()
+        plt.title("Segmentation Overlay")
+        plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+        plt.axis("off")
         
-        # Save visualization
+        # Save visualization with higher DPI like segmentation tool
         viz_path = self.temp_dir / f"medsam2_result_{uuid.uuid4().hex[:8]}.png"
-        plt.savefig(viz_path, bbox_inches='tight', dpi=150)
+        plt.savefig(viz_path, bbox_inches='tight', dpi=300)
         plt.close()
         
         return str(viz_path)
@@ -222,7 +230,7 @@ class MedSAM2Tool(BaseTool):
         prompt_coords: Optional[List[int]] = None,
         slice_index: Optional[int] = None,
         run_manager: Optional[CallbackManagerForToolRun] = None,
-    ) -> Dict[str, Any]:
+    ) -> Tuple[Dict[str, Any], Dict]:
         """Run MedSAM2 segmentation on the input image."""
         try:
             # Load image
@@ -266,15 +274,15 @@ class MedSAM2Tool(BaseTool):
             prompt_info = {
                 'box': input_box,
                 'point': input_point,
-                'type': prompt_type
+                'type': prompt_type,
+                'scores': scores  # Add scores for legend display
             }
             viz_path = self._create_visualization(image, masks, prompt_info)
             
-            # Process results (exclude large mask arrays to avoid token limits)
-            results = {
-                "success": True,
+            # Create output dictionary (main results)
+            output = {
+                "segmentation_image_path": viz_path,
                 "confidence_scores": scores.tolist() if hasattr(scores, 'tolist') else list(scores),
-                "visualization_path": viz_path,
                 "num_masks": len(masks),
                 "best_mask_score": float(scores[0]) if len(scores) > 0 else 0.0,
                 "mask_summary": {
@@ -282,31 +290,30 @@ class MedSAM2Tool(BaseTool):
                     "mask_shapes": [list(mask.shape) for mask in masks],
                     "segmented_area_pixels": [int(mask.sum()) for mask in masks]
                 },
-                # Include metadata in the main results
-                "metadata": {
-                    "image_path": image_path,
-                    "image_shape": list(image.shape),
-                    "prompt_type": prompt_type,
-                    "prompt_coords": prompt_coords,
-                    "device": self.device,
-                    "num_masks_generated": len(masks),
-                    "analysis_status": "completed",
-                }
             }
             
-            return results
+            # Create metadata dictionary
+            metadata = {
+                "image_path": image_path,
+                "segmentation_image_path": viz_path,
+                "image_shape": list(image.shape),
+                "prompt_type": prompt_type,
+                "prompt_coords": prompt_coords,
+                "device": self.device,
+                "num_masks_generated": len(masks),
+                "analysis_status": "completed",
+            }
+            
+            return output, metadata
             
         except Exception as e:
-            error_result = {
-                "error": str(e),
-                "success": False,
-                "metadata": {
-                    "image_path": image_path,
-                    "analysis_status": "failed",
-                    "error_details": str(e),
-                }
+            error_output = {"error": str(e)}
+            error_metadata = {
+                "image_path": image_path,
+                "analysis_status": "failed",
+                "error_details": str(e),
             }
-            return error_result
+            return error_output, error_metadata
 
     async def _arun(
         self,
@@ -315,6 +322,6 @@ class MedSAM2Tool(BaseTool):
         prompt_coords: Optional[List[int]] = None,
         slice_index: Optional[int] = None,
         run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
-    ) -> Dict[str, Any]:
+    ) -> Tuple[Dict[str, Any], Dict]:
         """Async version of _run."""
         return self._run(image_path, prompt_type, prompt_coords, slice_index, run_manager) 
