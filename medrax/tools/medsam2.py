@@ -5,6 +5,7 @@ import tempfile
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
+import sys
 
 from pydantic import BaseModel, Field
 from langchain_core.callbacks import (
@@ -13,9 +14,16 @@ from langchain_core.callbacks import (
 )
 from langchain_core.tools import BaseTool
 
-from MedSAM2.sam2.build_sam import build_sam2
-from MedSAM2.sam2.sam2_image_predictor import SAM2ImagePredictor
+# Add MedSAM2 to Python path for proper module resolution
+medsam2_path = str(Path(__file__).parent.parent.parent / "MedSAM2")
+if medsam2_path not in sys.path:
+    sys.path.append(medsam2_path)
+
+from sam2.build_sam import build_sam2
+from sam2.sam2_image_predictor import SAM2ImagePredictor
 from huggingface_hub import hf_hub_download
+from hydra import initialize_config_dir
+from hydra.core.global_hydra import GlobalHydra
 
 
 
@@ -80,6 +88,14 @@ class MedSAM2Tool(BaseTool):
         self.temp_dir = Path(temp_dir if temp_dir else tempfile.mkdtemp())
 
         try:
+            # Ensure proper hydra initialization by reinitializing with config_dir
+            # This works around the issue with initialize_config_module in sam2
+            if GlobalHydra.instance().is_initialized():
+                GlobalHydra.instance().clear()
+            
+            config_dir = Path(__file__).parent.parent.parent / "MedSAM2" / "sam2" / "configs"
+            initialize_config_dir(config_dir=str(config_dir), version_base="1.2")
+            
             hf_hub_download(
                 repo_id=model_path,
                 filename=model_file,
@@ -87,7 +103,7 @@ class MedSAM2Tool(BaseTool):
                 local_dir_use_symlinks=False
             )
 
-            config_path = f"configs/{model_cfg.replace('.yaml', '')}"
+            config_path = model_cfg.replace('.yaml', '')
             sam2_model = build_sam2(config_path, str(self.cache_dir / model_file), device=device)
             self.predictor = SAM2ImagePredictor(sam2_model)
             
