@@ -20,6 +20,7 @@ dependencies = [
     "langchain-openai>=0.0.2",
     "langchain-anthropic>=0.0.2",
     "langchain-cohere>=0.0.2",
+    "langchain-xai>=0.0.1",
     "langchain-chroma>=0.0.10",
     "langgraph>=0.0.10",
     "python-dotenv>=0.19.0",
