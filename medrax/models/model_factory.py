@@ -6,6 +6,7 @@ from typing import Dict, Any, Type
 from langchain_core.language_models import BaseLanguageModel
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_xai import ChatXAI
 
 
 class ModelFactory:
@@ -35,10 +36,8 @@ class ModelFactory:
             "default_base_url": "https://openrouter.ai/api/v1",
         },
         "grok": {
-        "class": ChatOpenAI,  # xAI uses OpenAI-compatible API
+        "class": ChatXAI,
         "env_key": "XAI_API_KEY",
-        "base_url_key": "XAI_BASE_URL", 
-        "default_base_url": "https://api.x.ai/v1"
         }
         # Add more providers with default configurations here
     }

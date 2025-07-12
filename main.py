@@ -186,7 +186,7 @@ if __name__ == "__main__":
         model_dir="/model-weights",
         temp_dir="temp",  # Change this to the path of the temporary directory
         device="cuda",
-        model="gpt-4.1-2025-04-14",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
+        model="grok-4",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
         temperature=0.7,
         top_p=0.95,
         model_kwargs=model_kwargs,
