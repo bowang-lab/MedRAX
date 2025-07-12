@@ -34,6 +34,12 @@ class ModelFactory:
             "base_url_key": "OPENROUTER_BASE_URL",
             "default_base_url": "https://openrouter.ai/api/v1",
         },
+        "grok": {
+        "class": ChatOpenAI,  # xAI uses OpenAI-compatible API
+        "env_key": "XAI_API_KEY",
+        "base_url_key": "XAI_BASE_URL", 
+        "default_base_url": "https://api.x.ai/v1"
+        }
         # Add more providers with default configurations here
     }
 
@@ -113,12 +119,6 @@ class ModelFactory:
         actual_model_name = model_name
         if provider_prefix in ["openrouter"] and model_name.startswith(f"{provider_prefix}-"):
             actual_model_name = model_name[len(provider_prefix) + 1 :]
-        elif provider_prefix in ["gpt", "chatgpt"]:
-            # For OpenAI models, use the full model name (gpt-4o, gpt-3.5-turbo, etc.)
-            actual_model_name = model_name
-        elif provider_prefix == "gemini" and model_name.startswith("gemini-"):
-            # For Gemini models, use the full model name (gemini-1.5-pro, etc.)
-            actual_model_name = model_name
 
         # Create and return the model instance
         return model_class(
