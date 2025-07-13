@@ -64,6 +64,51 @@ class ChatInterface:
 
         return self.display_file_path
 
+    def run_ctr_tool(self, chat_history: List[ChatMessage]) -> Tuple[List[ChatMessage], str]:
+        """
+        Run the CTR tool on the current image.
+
+        Args:
+            chat_history (List[ChatMessage]): Current chat history
+
+        Returns:
+            Tuple[List[ChatMessage], str]: Updated chat history and display path
+        """
+        if self.original_file_path:
+            result = self.tools_dict["CTRTool"]._run(self.original_file_path)
+            if "error" in result:
+                chat_history.append(
+                    ChatMessage(
+                        role="assistant",
+                        content=f"❌ Error in CTR tool: {result['error']}",
+                        metadata={"title": "Error"},
+                    )
+                )
+            else:
+                self.display_file_path = result["image_path"]
+                chat_history.append(
+                    ChatMessage(
+                        role="assistant",
+                        content=f"Cardiothoracic Ratio (CTR): {result['ctr_value']:.2f}",
+                        metadata={"title": "CTR Result"},
+                    )
+                )
+                chat_history.append(
+                    ChatMessage(
+                        role="assistant",
+                        content={"path": self.display_file_path},
+                    )
+                )
+        else:
+            chat_history.append(
+                ChatMessage(
+                    role="assistant",
+                    content="Please upload an image first.",
+                    metadata={"title": "Error"},
+                )
+            )
+        return chat_history, self.display_file_path
+
     def add_message(
         self, message: str, display_image: str, history: List[dict]
     ) -> Tuple[List[dict], gr.Textbox]:
@@ -245,6 +290,7 @@ def create_demo(agent, tools_dict):
                     with gr.Row():
                         clear_btn = gr.Button("Clear Chat")
                         new_thread_btn = gr.Button("New Thread")
+                        ctr_btn = gr.Button("Calculate CTR")
 
         # Event handlers
         def clear_chat():
@@ -275,5 +321,6 @@ def create_demo(agent, tools_dict):
 
         clear_btn.click(clear_chat, outputs=[chatbot, image_display])
         new_thread_btn.click(new_thread, outputs=[chatbot, image_display])
+        ctr_btn.click(interface.run_ctr_tool, inputs=[chatbot], outputs=[chatbot, image_display])
 
     return demo
