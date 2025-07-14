@@ -63,6 +63,25 @@ class LLMProvider(ABC):
         """
         pass
 
+    def test_connection(self) -> bool:
+        """Test the connection to the LLM provider.
+        
+        Returns:
+            bool: True if connection is successful, False otherwise
+        """
+        try:
+            # Simple test request
+            test_request = LLMRequest(
+                text="Hello",
+                temperature=0.0,
+                max_tokens=10
+            )
+            response = self.generate_response(test_request)
+            return response.content is not None and len(response.content.strip()) > 0
+        except Exception as e:
+            print(f"Connection test failed: {e}")
+            return False
+
     def _encode_image(self, image_path: str) -> str:
         """Encode image to base64 string.
         

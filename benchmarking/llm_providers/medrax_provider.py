@@ -13,7 +13,8 @@ from .base import LLMProvider, LLMRequest, LLMResponse
 # Import MedRAX components
 from medrax.agent import Agent
 from medrax.tools import *
-from medrax.utils import load_prompts_from_file, RAGConfig
+from medrax.utils import load_prompts_from_file
+from medrax.rag.rag import RAGConfig
 from medrax.models import ModelFactory
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import HumanMessage
