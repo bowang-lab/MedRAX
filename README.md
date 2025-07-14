@@ -1,5 +1,5 @@
 <h1 align="center">
-🤖 MedRAX: Medical Reasoning Agent for Chest X-ray
+🤖 MedRAX-2: Medical Reasoning Agent for Chest X-ray
 </h1>
 <p align="center"> <a href="https://arxiv.org/abs/2502.02673" target="_blank"><img src="https://img.shields.io/badge/arXiv-ICML 2025-FF6B6B?style=for-the-badge&logo=arxiv&logoColor=white" alt="arXiv"></a> <a href="https://github.com/bowang-lab/MedRAX"><img src="https://img.shields.io/badge/GitHub-Code-4A90E2?style=for-the-badge&logo=github&logoColor=white" alt="GitHub"></a> <a href="https://huggingface.co/datasets/wanglab/chest-agent-bench"><img src="https://img.shields.io/badge/HuggingFace-Dataset-FFBF00?style=for-the-badge&logo=huggingface&logoColor=white" alt="HuggingFace Dataset"></a> </p>
 
@@ -15,7 +15,7 @@ Chest X-rays (CXRs) play an integral role in driving critical decisions in disea
 ## MedRAX
 MedRAX is built on a robust technical foundation:
 - **Core Architecture**: Built on LangChain and LangGraph frameworks
-- **Language Models**: Supports multiple LLM providers including OpenAI (GPT-4o) and Google (Gemini) models
+- **Language Models**: Supports multiple LLM providers including OpenAI (GPT-4o), Google (Gemini), and xAI (Grok) models
 - **Deployment**: Supports both local and cloud-based deployments
 - **Interface**: Production-ready interface built with Gradio
 - **Modular Design**: Tool-agnostic architecture allowing easy integration of new capabilities
@@ -54,7 +54,9 @@ Unzip the Eurorad figures to your local `MedMAX` directory.
 unzip chestagentbench/figures.zip
 ```
 
-To evaluate with GPT-4o, set your OpenAI API key in your `.env` file (see the "Environment Variable Setup" section for details) and run the quickstart script.
+To evaluate with different models, set the appropriate API key in your `.env` file (see the "Environment Variable Setup" section for details) and run the quickstart script.
+
+**Example with GPT-4o:**
 ```
 python quickstart.py \
     --model gpt-4o \
@@ -111,6 +113,9 @@ GOOGLE_API_KEY=
 # OpenRouter
 OPENROUTER_API_KEY=
 OPENROUTER_BASE_URL= # Optional: Defaults to https://openrouter.ai/api/v1
+
+# xAI
+XAI_API_KEY=
 
 # -------------------------
 # Tool-specific API Keys
@@ -366,7 +371,10 @@ Supported prefix: `openrouter-`
 
 Access many open source and proprietary models via [OpenRouter](https://openrouter.ai/).
 
-**Note:** Tool compatibility may vary with open-source models. For best results with tools, we recommend using OpenAI or Google Gemini models.
+#### xAI Grok Models
+Supported prefix: `grok-`
+
+**Note:** Tool compatibility may vary with open-source models. For best results with tools, we recommend using OpenAI, Google Gemini, or xAI Grok models.
 
 #### Local LLMs
 If you are running a local LLM using frameworks like [Ollama](https://ollama.com/) or [LM Studio](https://lmstudio.ai/), you can configure the `OPENAI_BASE_URL` in your `.env` file to point to your local endpoint (e.g., `http://localhost:11434/v1`).

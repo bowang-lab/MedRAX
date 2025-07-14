@@ -172,3 +172,7 @@ logs/
 temp/
 
 .gradio/
+
+hf_files/
+medrax-pdfs/
+model-weights/
