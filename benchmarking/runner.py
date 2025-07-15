@@ -57,11 +57,11 @@ class BenchmarkRunner:
         self.output_dir = Path(config.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Set up logging
-        self._setup_logging()
-        
         # Generate unique run ID
         self.run_id = f"{config.benchmark_name}_{config.model_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        # Set up logging
+        self._setup_logging()
         
         self.logger.info(f"Initialized benchmark runner with ID: {self.run_id}")
 

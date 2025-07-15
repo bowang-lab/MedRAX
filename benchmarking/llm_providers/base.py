@@ -73,8 +73,8 @@ class LLMProvider(ABC):
             # Simple test request
             test_request = LLMRequest(
                 text="Hello",
-                temperature=0.0,
-                max_tokens=10
+                temperature=0.5,
+                max_tokens=1000
             )
             response = self.generate_response(test_request)
             return response.content is not None and len(response.content.strip()) > 0

@@ -102,6 +102,12 @@ def run_benchmark_command(args) -> None:
     print("\n" + "="*50)
     print("BENCHMARK COMPLETED")
     print("="*50)
+    
+    # Check if benchmark run was successful
+    if "error" in summary:
+        print(f"Error: {summary['error']}")
+        return
+    
     print(f"Overall Accuracy: {summary['results']['accuracy']:.2f}%")
     print(f"Total Questions: {summary['results']['total_questions']}")
     print(f"Correct Answers: {summary['results']['correct_answers']}")

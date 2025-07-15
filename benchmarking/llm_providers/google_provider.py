@@ -44,30 +44,28 @@ class GoogleProvider(LLMProvider):
         if request.system_prompt:
             messages.append(SystemMessage(content=request.system_prompt))
         
-        # Build user message content
-        user_content = []
-        user_content.append({
-            "type": "text",
-            "text": request.text
-        })
-        
-        # Add images if provided
+        # For langchain Google Gemini, we need to construct content differently
         if request.images:
+            # For multimodal content, use a list format
+            content_parts = [request.text]
+            
+            # Add images if provided
             valid_images = self._validate_image_paths(request.images)
             for image_path in valid_images:
                 try:
-                    # For langchain Google, we can pass the image data directly
+                    # For langchain Google, pass image data as base64
                     image_b64 = self._encode_image(image_path)
-                    user_content.append({
+                    content_parts.append({
                         "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{image_b64}"
-                        }
+                        "image_url": f"data:image/jpeg;base64,{image_b64}"
                     })
                 except Exception as e:
                     print(f"Error reading image {image_path}: {e}")
-        
-        messages.append(HumanMessage(content=user_content))
+            
+            messages.append(HumanMessage(content=content_parts))
+        else:
+            # Text-only message
+            messages.append(HumanMessage(content=request.text))
         
         # Make API call using langchain
         try:
