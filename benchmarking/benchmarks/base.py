@@ -67,31 +67,6 @@ class Benchmark(ABC):
             List[BenchmarkDataPoint]: List of data points at the given indices
         """
         return [self.get_data_point(i) for i in indices]
-    
-    def save_subset(self, indices: List[int], output_path: str) -> None:
-        """Save a subset of the benchmark to a file.
-        
-        Args:
-            indices (List[int]): Indices of data points to save
-            output_path (str): Path to save the subset
-        """
-        subset = self.get_subset(indices)
-        
-        # Convert to serializable format
-        subset_data = []
-        for dp in subset:
-            subset_data.append({
-                "id": dp.id,
-                "text": dp.text,
-                "images": dp.images,
-                "correct_answer": dp.correct_answer,
-                "metadata": dp.metadata,
-                "case_id": dp.case_id,
-                "category": dp.category,
-            })
-        
-        with open(output_path, 'w') as f:
-            json.dump(subset_data, f, indent=2)
 
     def get_by_category(self, category: str) -> List[BenchmarkDataPoint]:
         """Get all data points of a specific category.

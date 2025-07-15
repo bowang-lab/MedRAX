@@ -25,7 +25,6 @@ def create_llm_provider(model_name: str, provider_type: str, **kwargs) -> LLMPro
     provider_map = {
         "openai": OpenAIProvider,
         "google": GoogleProvider,
-        "openrouter": OpenRouterProvider,
         "medrax": MedRAXProvider,
     }
     
@@ -48,7 +47,6 @@ def create_benchmark(benchmark_name: str, data_dir: str, **kwargs) -> Benchmark:
         Benchmark: The configured benchmark
     """
     benchmark_map = {
-        "chest_agent_bench": ChestAgentBench,
         "rexvqa": ReXVQABenchmark,
     }
     
@@ -179,7 +177,6 @@ def list_providers_command(args) -> None:
     print("Available LLM Providers:")
     print("- openai: OpenAI GPT models")
     print("- google: Google Gemini models")
-    print("- openrouter: OpenRouter API (multiple models)")
     print("- medrax: MedRAX agent system")
 
 
@@ -197,8 +194,8 @@ def main():
     # Run benchmark command
     run_parser = subparsers.add_parser("run", help="Run a benchmark")
     run_parser.add_argument("--model", required=True, help="Model name (e.g., gpt-4o, gemini-2.5-pro)")
-    run_parser.add_argument("--provider", required=True, choices=["openai", "google", "openrouter", "medrax"], help="LLM provider")
-    run_parser.add_argument("--benchmark", required=True, choices=["chest_agent_bench", "rexvqa"], help="Benchmark to run")
+    run_parser.add_argument("--provider", required=True, choices=["openai", "google", "medrax"], help="LLM provider")
+    run_parser.add_argument("--benchmark", required=True, choices=["rexvqa"], help="Benchmark to run")
     run_parser.add_argument("--data-dir", required=True, help="Directory containing benchmark data")
     run_parser.add_argument("--output-dir", default="benchmark_results", help="Output directory for results")
     run_parser.add_argument("--max-questions", type=int, help="Maximum number of questions to process")

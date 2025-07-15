@@ -44,7 +44,7 @@ class GoogleProvider(LLMProvider):
         if request.system_prompt:
             messages.append(SystemMessage(content=request.system_prompt))
         
-        # For langchain Google Gemini, we need to construct content differently
+        # Construct content for multimodal content
         if request.images:
             # For multimodal content, use a list format
             content_parts = [request.text]
