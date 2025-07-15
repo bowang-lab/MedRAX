@@ -22,7 +22,7 @@ MedRAX is built on a robust technical foundation:
 
 ### Integrated Tools
 - **Visual QA**: Utilizes CheXagent and LLaVA-Med for complex visual understanding and medical reasoning
-- **Segmentation**: Employs MedSAM and PSPNet model trained on ChestX-Det for precise anatomical structure identification
+- **Segmentation**: Employs MedSAM2 (advanced medical image segmentation) and PSPNet model trained on ChestX-Det for precise anatomical structure identification
 - **Grounding**: Uses Maira-2 for localizing specific findings in medical images
 - **Report Generation**: Implements SwinV2 Transformer trained on CheXpert Plus for detailed medical reporting
 - **Disease Classification**: Leverages DenseNet-121 from TorchXRayVision for detecting 18 pathology classes
@@ -232,10 +232,17 @@ XRayVQATool(
 ```
 - CheXagent weights download automatically
 
-### MedSAM Tool
+### MedSAM2 Tool
+```python
+MedSAM2Tool(
+    device=device, 
+    cache_dir=model_dir, 
+    temp_dir=temp_dir
+)
 ```
-Support for MedSAM segmentation will be added in a future update.
-```
+- Advanced medical image segmentation using MedSAM2 (adapted from Meta's SAM2)
+- Supports interactive prompting with box coordinates, point clicks, or automatic segmentation
+- Model weights automatically downloaded from HuggingFace (wanglab/MedSAM2)
 
 ### Python Sandbox Tool
 ```python

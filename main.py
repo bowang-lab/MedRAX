@@ -86,6 +86,9 @@ def initialize_agent(
         "DicomProcessorTool": lambda: DicomProcessorTool(temp_dir=temp_dir),
         "MedicalRAGTool": lambda: RAGTool(config=rag_config),
         "WebBrowserTool": lambda: WebBrowserTool(),
+        "MedSAM2Tool": lambda: MedSAM2Tool(
+            device=device, cache_dir=model_dir, temp_dir=temp_dir
+        ),
     }
 
     try:
@@ -138,7 +141,7 @@ if __name__ == "__main__":
     # Example: initialize with only specific tools
     # Here three tools are commented out, you can uncomment them to use them
     selected_tools = [
-        # "ImageVisualizerTool",  # For displaying images in the UI
+        "ImageVisualizerTool",  # For displaying images in the UI
         # "DicomProcessorTool",  # For processing DICOM medical image files
         # "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
         # "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
@@ -148,9 +151,10 @@ if __name__ == "__main__":
         # "LlavaMedTool",  # For multimodal medical image understanding
         # "XRayPhraseGroundingTool",  # For locating described features in X-rays
         # "ChestXRayGeneratorTool",  # For generating synthetic chest X-rays
-        "WebBrowserTool",  # For web browsing and search capabilities
-        "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
-        "PythonSandboxTool",  # Add the Python sandbox tool
+        "MedSAM2Tool",  # For advanced medical image segmentation using MedSAM2
+        # "WebBrowserTool",  # For web browsing and search capabilities
+        # "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
+        # "PythonSandboxTool",  # Add the Python sandbox tool
     ]
 
     # Configure the Retrieval Augmented Generation (RAG) system
@@ -183,7 +187,7 @@ if __name__ == "__main__":
     agent, tools_dict = initialize_agent(
         prompt_file="medrax/docs/system_prompts.txt",
         tools_to_use=selected_tools,
-        model_dir="/model-weights",
+        model_dir="model-weights",
         temp_dir="temp",  # Change this to the path of the temporary directory
         device="cuda",
         model="grok-4",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro

@@ -244,6 +244,9 @@ class ChatInterface:
                                 if tool_name == "image_visualizer":
                                     try:
                                         result = json.loads(msg.content)
+                                        # Handle case where tool returns array [output, metadata]
+                                        if isinstance(result, list) and len(result) > 0:
+                                            result = result[0]  # Take the first element (output)
                                         if isinstance(result, dict) and "image_path" in result:
                                             self.display_file_path = result["image_path"]
                                             chat_history.append(
