@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Any, Iterator, Tuple
 from dataclasses import dataclass
 from pathlib import Path
-import json
 
 
 @dataclass
@@ -138,9 +137,8 @@ class Benchmark(ABC):
             "total_cases": len(self.get_case_ids()),
             "categories": self.get_categories(),
             "category_counts": {},
+            "has_images": False,
             "images_per_question": [],
-            "has_images": 0,
-            "no_images": 0,
         }
         
         for dp in self:
@@ -150,11 +148,10 @@ class Benchmark(ABC):
             
             # Image statistics
             if dp.images:
+                stats["has_images"] = True
                 stats["images_per_question"].append(len(dp.images))
-                stats["has_images"] += 1
             else:
                 stats["images_per_question"].append(0)
-                stats["no_images"] += 1
         
         if stats["images_per_question"]:
             stats["avg_images_per_question"] = sum(stats["images_per_question"]) / len(stats["images_per_question"])
