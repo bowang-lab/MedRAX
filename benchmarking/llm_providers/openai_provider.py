@@ -48,8 +48,8 @@ class OpenAIProvider(LLMProvider):
         messages = []
         
         # Add system prompt if provided
-        if request.system_prompt:
-            messages.append(SystemMessage(content=request.system_prompt))
+        if self.system_prompt:
+            messages.append(SystemMessage(content=self.system_prompt))
         
         # Build user message content
         user_content = []

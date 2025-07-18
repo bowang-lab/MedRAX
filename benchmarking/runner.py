@@ -30,16 +30,13 @@ class BenchmarkResult:
 @dataclass
 class BenchmarkRunConfig:
     """Configuration for a benchmark run."""
+    provider_name: str
     model_name: str
     benchmark_name: str
     output_dir: str
     max_questions: Optional[int] = None
-    start_index: int = 0
     temperature: float = 0.7
     max_tokens: int = 1500
-    system_prompt: Optional[str] = None
-    save_frequency: int = 10  # Save results every N questions
-    log_level: str = "INFO"
     additional_params: Optional[Dict[str, Any]] = None
 
 
@@ -58,7 +55,7 @@ class BenchmarkRunner:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         # Generate unique run ID
-        self.run_id = f"{config.benchmark_name}_{config.model_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        self.run_id = f"{config.benchmark_name}_{config.provider_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
         # Set up logging
         self._setup_logging()
@@ -71,7 +68,7 @@ class BenchmarkRunner:
         
         # Create logger
         self.logger = logging.getLogger(f"benchmark_runner_{self.run_id}")
-        self.logger.setLevel(getattr(logging, self.config.log_level))
+        self.logger.setLevel(logging.INFO)
         
         # Create handlers
         file_handler = logging.FileHandler(log_file)
@@ -114,9 +111,9 @@ class BenchmarkRunner:
         # Get data points to process
         total_questions = len(benchmark)
         max_questions = self.config.max_questions or total_questions
-        end_index = min(self.config.start_index + max_questions, total_questions)
+        end_index = min(max_questions, total_questions)
         
-        self.logger.info(f"Processing questions {self.config.start_index} to {end_index-1} of {total_questions}")
+        self.logger.info(f"Processing questions {0} to {end_index-1} of {total_questions}")
         
         # Initialize counters
         processed = 0
@@ -124,7 +121,7 @@ class BenchmarkRunner:
         total_duration = 0.0
         
         # Process each data point
-        for i in tqdm(range(self.config.start_index, end_index), desc="Processing questions"):
+        for i in tqdm(range(0, end_index), desc="Processing questions"):
             try:
                 data_point = benchmark.get_data_point(i)
                 
@@ -141,13 +138,13 @@ class BenchmarkRunner:
                 self.results.append(result)
                 
                 # Log progress
-                if processed % self.config.save_frequency == 0:
+                if processed % 10 == 0:
                     self._save_intermediate_results()
                     accuracy = (correct / processed) * 100
                     avg_duration = total_duration / processed
                     
                     self.logger.info(
-                        f"Progress: {processed}/{end_index - self.config.start_index} | "
+                        f"Progress: {processed}/{end_index} | "
                         f"Accuracy: {accuracy:.2f}% | "
                         f"Avg Duration: {avg_duration:.2f}s"
                     )
@@ -169,6 +166,14 @@ class BenchmarkRunner:
         
         # Save final results
         summary = self._save_final_results(benchmark)
+        
+        # Clean up provider resources
+        if hasattr(llm_provider, 'cleanup'):
+            try:
+                llm_provider.cleanup()
+                self.logger.info("Provider cleanup completed")
+            except Exception as e:
+                self.logger.warning(f"Provider cleanup failed: {e}")
         
         self.logger.info(f"Benchmark run completed: {self.run_id}")
         self.logger.info(f"Final accuracy: {summary['results']['accuracy']:.2f}%")
@@ -197,7 +202,6 @@ class BenchmarkRunner:
             request = LLMRequest(
                 text=data_point.text,
                 images=data_point.images,
-                system_prompt=self.config.system_prompt,
                 temperature=self.config.temperature,
                 max_tokens=self.config.max_tokens,
                 additional_params=self.config.additional_params
@@ -371,12 +375,10 @@ class BenchmarkRunner:
                 "benchmark_name": self.config.benchmark_name,
                 "temperature": self.config.temperature,
                 "max_tokens": self.config.max_tokens,
-                "system_prompt": self.config.system_prompt,
             },
             "benchmark_info": {
                 "total_size": len(benchmark),
                 "processed_questions": total_questions,
-                "start_index": self.config.start_index,
             },
             "results": {
                 "accuracy": accuracy,

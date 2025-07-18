@@ -138,7 +138,7 @@ class Benchmark(ABC):
             "categories": self.get_categories(),
             "category_counts": {},
             "has_images": False,
-            "images_per_question": [],
+            "num_images": 0,
         }
         
         for dp in self:
@@ -149,17 +149,7 @@ class Benchmark(ABC):
             # Image statistics
             if dp.images:
                 stats["has_images"] = True
-                stats["images_per_question"].append(len(dp.images))
-            else:
-                stats["images_per_question"].append(0)
-        
-        if stats["images_per_question"]:
-            stats["avg_images_per_question"] = sum(stats["images_per_question"]) / len(stats["images_per_question"])
-            stats["max_images_per_question"] = max(stats["images_per_question"])
-        else:
-            stats["avg_images_per_question"] = 0
-            stats["max_images_per_question"] = 0
-            
+                stats["num_images"] += len(dp.images)
         return stats
 
     def validate_images(self) -> Tuple[List[str], List[str]]:

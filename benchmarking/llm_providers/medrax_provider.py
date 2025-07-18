@@ -33,7 +33,7 @@ class MedRAXProvider(LLMProvider):
             print("Starting server...")
 
             selected_tools = [
-                "ImageVisualizerTool",  # For displaying images in the UI
+                # "ImageVisualizerTool",  # For displaying images in the UI
                 # "DicomProcessorTool",  # For processing DICOM medical image files
                 # "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
                 # "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
@@ -45,7 +45,7 @@ class MedRAXProvider(LLMProvider):
                 # "ChestXRayGeneratorTool",  # For generating synthetic chest X-rays
                 "WebBrowserTool",  # For web browsing and search capabilities
                 "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
-                "PythonSandboxTool",  # Add the Python sandbox tool
+                # "PythonSandboxTool",  # Add the Python sandbox tool
             ]
 
             rag_config = RAGConfig(
@@ -73,7 +73,7 @@ class MedRAXProvider(LLMProvider):
                 tools_to_use=selected_tools,
                 model_dir="/model-weights",
                 temp_dir=self.session_temp_dir,  # Change this to the path of the temporary directory
-                device="cuda",
+                device="cpu",
                 model=self.model_name,  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
                 temperature=0.7,
                 top_p=0.95,
@@ -118,11 +118,20 @@ class MedRAXProvider(LLMProvider):
             image_paths = []
             if request.images:
                 valid_images = self._validate_image_paths(request.images)
+                print(f"Processing {len(valid_images)} images")
                 for i, image_path in enumerate(valid_images):
+                    print(f"Original image path: {image_path}")
                     # Copy image to session temp directory
                     dest_path = self.session_temp_dir / f"image_{i}_{Path(image_path).name}"
+                    print(f"Destination path: {dest_path}")
                     shutil.copy2(image_path, dest_path)
                     image_paths.append(str(dest_path))
+                    
+                    # Verify file exists after copy
+                    if not dest_path.exists():
+                        print(f"ERROR: File not found after copy: {dest_path}")
+                    else:
+                        print(f"File successfully copied: {dest_path}")
                     
                     # Add image path message for tools
                     messages.append({
@@ -167,9 +176,6 @@ class MedRAXProvider(LLMProvider):
             
             duration = time.time() - start_time
             
-            # Clean up temporary files
-            self._cleanup_temp_files()
-            
             return LLMResponse(
                 content=response_content.strip(),
                 usage={"agent_tools": list(self.tools_dict.keys())},
@@ -178,7 +184,6 @@ class MedRAXProvider(LLMProvider):
             )
             
         except Exception as e:
-            self._cleanup_temp_files()
             return LLMResponse(
                 content=f"Error: {str(e)}",
                 duration=time.time() - start_time,
@@ -190,5 +195,10 @@ class MedRAXProvider(LLMProvider):
         try:
             if hasattr(self, 'session_temp_dir') and self.session_temp_dir.exists():
                 shutil.rmtree(self.session_temp_dir)
+                print(f"Cleaned up temporary directory: {self.session_temp_dir}")
         except Exception as e:
             print(f"Warning: Failed to cleanup temp files: {e}")
+    
+    def cleanup(self) -> None:
+        """Clean up resources when done with the provider."""
+        self._cleanup_temp_files()

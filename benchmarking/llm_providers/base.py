@@ -5,6 +5,7 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 import base64
 from pathlib import Path
+from medrax.utils.utils import load_prompts_from_file
 
 
 @dataclass
@@ -12,7 +13,6 @@ class LLMRequest:
     """Request to an LLM provider."""
     text: str
     images: Optional[List[str]] = None  # List of image paths
-    system_prompt: Optional[str] = None
     temperature: float = 0.7
     max_tokens: int = 1500
     additional_params: Optional[Dict[str, Any]] = None
@@ -43,6 +43,17 @@ class LLMProvider(ABC):
         """
         self.model_name = model_name
         self.config = kwargs
+        
+        # Always load system prompt from file
+        try:
+            prompts = load_prompts_from_file("medrax/docs/system_prompts.txt")
+            self.system_prompt = prompts.get("MEDICAL_ASSISTANT", None)
+            if self.system_prompt is None:
+                print(f"Warning: System prompt type 'MEDICAL_ASSISTANT' not found in medrax/docs/system_prompts.txt.")
+        except Exception as e:
+            print(f"Error loading system prompt: {e}")
+            self.system_prompt = None
+
         self._setup()
 
     @abstractmethod

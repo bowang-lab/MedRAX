@@ -40,8 +40,8 @@ class GoogleProvider(LLMProvider):
         messages = []
         
         # Add system prompt if provided
-        if request.system_prompt:
-            messages.append(SystemMessage(content=request.system_prompt))
+        if self.system_prompt:
+            messages.append(SystemMessage(content=self.system_prompt))
         
         # Construct content for multimodal content
         if request.images:

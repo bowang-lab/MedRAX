@@ -45,6 +45,7 @@ def create_benchmark(benchmark_name: str, data_dir: str, **kwargs) -> Benchmark:
     """
     benchmark_map = {
         "rexvqa": ReXVQABenchmark,
+        "chestagentbench": ChestAgentBenchBenchmark,
     }
     
     if benchmark_name not in benchmark_map:
@@ -70,6 +71,7 @@ def run_benchmark_command(args) -> None:
     
     # Create runner config
     config = BenchmarkRunConfig(
+        provider_name=args.provider,
         model_name=args.model,
         benchmark_name=args.benchmark,
         output_dir=args.output_dir,
@@ -110,7 +112,7 @@ def main():
     run_parser = subparsers.add_parser("run", help="Run a benchmark")
     run_parser.add_argument("--model", required=True, help="Model name (e.g., gpt-4o, gemini-2.5-pro)")
     run_parser.add_argument("--provider", required=True, choices=["openai", "google", "medrax"], help="LLM provider")
-    run_parser.add_argument("--benchmark", required=True, choices=["rexvqa"], help="Benchmark to run")
+    run_parser.add_argument("--benchmark", required=True, choices=["rexvqa", "chestagentbench"], help="Benchmark to run")
     run_parser.add_argument("--data-dir", required=True, help="Directory containing benchmark data")
     run_parser.add_argument("--output-dir", default="benchmark_results", help="Output directory for results")
     run_parser.add_argument("--max-questions", type=int, help="Maximum number of questions to process")
