@@ -6,7 +6,6 @@ to search the web, visit URLs, and extract information from web pages.
 
 import os
 import re
-import json
 import time
 from typing import Dict, Optional, Any, Type, Tuple
 from urllib.parse import urlparse

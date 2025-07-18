@@ -12,4 +12,5 @@ from .utils import *
 from .rag import *
 from .web_browser import *
 from .python_tool import *
+from .medsam2 import *
 

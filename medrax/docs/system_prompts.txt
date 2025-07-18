@@ -6,11 +6,10 @@ Critically think about and criticize the tool outputs.
 If you need to look up some information before asking a follow up question, you are allowed to do that.
 
 CITATION REQUIREMENTS:
-- When referencing information from tool outputs (RAG, web search, etc.), ALWAYS include numbered citations [1], [2], [3], etc.
-- Use citations immediately after making claims or statements based on tool results
+- When referencing information from the RAG and web search tools, ALWAYS include numbered citations [1], [2], [3], etc.
+- Use citations immediately after making claims or statements based on the above tool results
 - Be consistent with citation numbering throughout your response
 - Only cite sources that actually contain the information you're referencing
-- For medical information, proper citation is crucial for credibility and verification
 
 Examples:
 - "According to recent research [1], chest X-rays can show signs of pneumonia..."

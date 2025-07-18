@@ -18,11 +18,12 @@ dependencies = [
     "langchain-core>=0.1.0",
     "langchain-community>=0.0.20",
     "langchain-openai>=0.0.2",
+    "langchain-cohere>=0.3.0,<0.4.0",
     "langchain-anthropic>=0.0.2",
-    "langchain-cohere>=0.0.2",
     "langchain-xai>=0.0.1",
     "langchain-chroma>=0.0.10",
     "langgraph>=0.0.10",
+    "hydra-core>=1.1.0",
     "python-dotenv>=0.19.0",
     "pandas>=1.5.0",
     "pydantic>=1.8.0",
@@ -32,7 +33,7 @@ dependencies = [
     "torchxrayvision>=0.0.37",
     "transformers @ git+https://github.com/huggingface/transformers.git@88d960937c81a32bfb63356a2e8ecf7999619681",
     "datasets>=2.15.0",
-    "tokenizers>=0.10.0",
+    "tokenizers>=0.20,<0.21",
     "sentencepiece>=0.1.95",
     "shortuuid>=1.0.0",
     "tqdm>=4.64.0",
@@ -61,7 +62,6 @@ dependencies = [
     "matplotlib>=3.8.0",
     "diffusers>=0.20.0",
     "pydicom>=2.3.0",
-    "gdcm>=1.0.0",
     "pylibjpeg>=1.0.0",
     "jupyter>=1.0.0",
     "albumentations>=1.0.0",
@@ -74,6 +74,7 @@ dependencies = [
     "langchain-sandbox>=0.0.6",
     "seaborn>=0.12.0",
     "huggingface_hub>=0.17.0",
+    "iopath>=0.1.10",
 ]
 
 [project.optional-dependencies]

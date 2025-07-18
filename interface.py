@@ -9,7 +9,6 @@ import shutil
 from typing import AsyncGenerator, List, Optional, Tuple
 from gradio import ChatMessage
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
-from medrax.utils import CitationManager, Citation
 
 
 class ChatInterface:
@@ -37,10 +36,6 @@ class ChatInterface:
         self.original_file_path = None  # For LLM (.dcm or other)
         self.display_file_path = None  # For UI (always viewable format)
         self.pending_tool_calls = {}
-        # Citation management
-        self.citation_manager = CitationManager()
-        self.current_tool_outputs = []  # Track tool outputs for citation matching
-        self.current_citations = []  # Store citations for current conversation
 
     def handle_upload(self, file_path: str) -> str:
         """
@@ -113,10 +108,6 @@ class ChatInterface:
         # Initialize thread if needed
         if not self.current_thread_id:
             self.current_thread_id = str(time.time())
-        
-        # Reset current tool outputs and citations for new message
-        self.current_tool_outputs = []
-        self.current_citations = []
 
         messages = []
         image_path = self.original_file_path or display_image
@@ -175,19 +166,6 @@ class ChatInterface:
                         elif isinstance(msg, AIMessage):
                             if msg.content:
                                 final_content = re.sub(r"temp/[^\s]*", "", msg.content).strip()
-                                
-                                # Extract citations from the final content
-                                if self.current_tool_outputs:
-                                    available_citations = self.citation_manager.create_citations_from_tool_outputs(
-                                        self.current_tool_outputs
-                                    )
-                                    _, matched_citations = self.citation_manager.match_citations_to_text(
-                                        final_content, available_citations
-                                    )
-                                    self.current_citations = self.citation_manager.format_citations_for_display(
-                                        matched_citations
-                                    )
-                                
                                 if final_message:
                                     final_message.content = final_content
                                 else:
@@ -216,12 +194,8 @@ class ChatInterface:
                                 try:
                                     tool_output_json = json.loads(msg.content)
                                     tool_output_str = json.dumps(tool_output_json, indent=2)
-                                    # Store tool output for citation matching
-                                    self.current_tool_outputs.append(tool_output_json)
                                 except (json.JSONDecodeError, TypeError):
                                     tool_output_str = str(msg.content)
-                                    # Store string output for citation matching
-                                    self.current_tool_outputs.append({"content": str(msg.content)})
 
                                 tool_args_str = json.dumps(tool_args, indent=2)
 
@@ -244,6 +218,9 @@ class ChatInterface:
                                 if tool_name == "image_visualizer":
                                     try:
                                         result = json.loads(msg.content)
+                                        # Handle case where tool returns array [output, metadata]
+                                        if isinstance(result, list) and len(result) > 0:
+                                            result = result[0]  # Take the first element (output)
                                         if isinstance(result, dict) and "image_path" in result:
                                             self.display_file_path = result["image_path"]
                                             chat_history.append(
@@ -291,7 +268,7 @@ def create_demo(agent, tools_dict):
                 with gr.Column(scale=5):
                     chatbot = gr.Chatbot(
                         [],
-                        height=800,
+                        height=1000,
                         container=True,
                         show_label=True,
                         elem_classes="chat-box",
@@ -312,7 +289,7 @@ def create_demo(agent, tools_dict):
 
                 with gr.Column(scale=3):
                     image_display = gr.Image(
-                        label="Image", type="filepath", height=400, container=True
+                        label="Image", type="filepath", height=600, container=True
                     )
                     with gr.Row():
                         upload_button = gr.UploadButton(
@@ -323,14 +300,6 @@ def create_demo(agent, tools_dict):
                             "📄 Upload DICOM",
                             file_types=["file"],
                         )
-                    
-                    # Citation display panel
-                    citations_display = gr.HTML(
-                        value="",
-                        label="📚 Sources & Citations",
-                        visible=False
-                    )
-                    
                     with gr.Row():
                         clear_btn = gr.Button("Clear Chat")
                         new_thread_btn = gr.Button("New Thread")
@@ -339,44 +308,14 @@ def create_demo(agent, tools_dict):
         def clear_chat():
             interface.original_file_path = None
             interface.display_file_path = None
-            interface.current_citations = []
-            return [], None, "", False
+            return [], None
 
         def new_thread():
             interface.current_thread_id = str(time.time())
-            interface.current_citations = []
-            return [], interface.display_file_path, "", False
+            return [], interface.display_file_path
 
         def handle_file_upload(file):
             return interface.handle_upload(file.name)
-
-        def format_citations(citations):
-            """Format citations for HTML display."""
-            if not citations:
-                return "", False
-            
-            html_content = "<div style='max-height: 200px; overflow-y: auto; padding: 10px; border: 1px solid #ddd; border-radius: 5px;'>"
-            html_content += "<h4 style='margin-top: 0; color: #333;'>📚 Sources & Citations</h4>"
-            
-            for citation in citations:
-                source_type_icon = "🔗" if citation["source_type"] == "web" else "📄"
-                title = citation.get("title", "Unknown Source")
-                url = citation.get("url", "")
-                snippet = citation.get("snippet", "")
-                
-                html_content += f"<div style='margin-bottom: 10px; padding: 8px; background: #f9f9f9; border-radius: 4px;'>"
-                html_content += f"<strong>{source_type_icon} [{citation['number']}] {title}</strong><br>"
-                
-                if url:
-                    html_content += f"<a href='{url}' target='_blank' style='color: #1976d2; text-decoration: none;'>{url}</a><br>"
-                
-                if snippet:
-                    html_content += f"<small style='color: #666;'>{snippet}</small>"
-                
-                html_content += "</div>"
-            
-            html_content += "</div>"
-            return html_content, True
 
         chat_msg = txt.submit(
             interface.add_message, inputs=[txt, image_display, chatbot], outputs=[chatbot, txt]
@@ -387,20 +326,12 @@ def create_demo(agent, tools_dict):
             outputs=[chatbot, image_display, txt],
         )
         bot_msg.then(lambda: gr.Textbox(interactive=True), None, [txt])
-        
-        # Update citations after processing
-        def update_citations_display():
-            citations = interface.current_citations
-            citation_html, citation_visible = format_citations(citations)
-            return citation_html, citation_visible
-        
-        bot_msg.then(update_citations_display, outputs=[citations_display, citations_display])
 
         upload_button.upload(handle_file_upload, inputs=upload_button, outputs=image_display)
 
         dicom_upload.upload(handle_file_upload, inputs=dicom_upload, outputs=image_display)
 
-        clear_btn.click(clear_chat, outputs=[chatbot, image_display, citations_display, citations_display])
-        new_thread_btn.click(new_thread, outputs=[chatbot, image_display, citations_display, citations_display])
+        clear_btn.click(clear_chat, outputs=[chatbot, image_display])
+        new_thread_btn.click(new_thread, outputs=[chatbot, image_display])
 
     return demo
