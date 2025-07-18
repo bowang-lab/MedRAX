@@ -1,23 +1,14 @@
 """MedRAX LLM provider implementation."""
 
-import os
 import time
 import tempfile
 import shutil
-from typing import Dict, Any, List, Optional
 from pathlib import Path
-import json
 
 from .base import LLMProvider, LLMRequest, LLMResponse
 
-# Import MedRAX components
-from medrax.agent import Agent
-from medrax.tools import *
-from medrax.utils import load_prompts_from_file
 from medrax.rag.rag import RAGConfig
-from medrax.models import ModelFactory
-from langgraph.checkpoint.memory import MemorySaver
-from langchain_core.messages import HumanMessage
+from main import initialize_agent
 
 
 class MedRAXProvider(LLMProvider):
@@ -30,21 +21,7 @@ class MedRAXProvider(LLMProvider):
             model_name (str): Base LLM model name (e.g., "gpt-4.1-2025-04-14")
             **kwargs: Additional configuration parameters
         """
-        # MedRAX-specific configuration
-        self.tools_to_use = kwargs.get("tools_to_use", [
-            "WebBrowserTool",
-            "MedicalRAGTool", 
-            "PythonSandboxTool"
-        ])
-        self.model_dir = kwargs.get("model_dir", "/model-weights")
-        self.temp_dir = kwargs.get("temp_dir", "temp")
-        self.device = kwargs.get("device", "cuda")
-        self.temperature = kwargs.get("temperature", 0.7)
-        self.top_p = kwargs.get("top_p", 0.95)
-        self.rag_config = kwargs.get("rag_config")
-        self.prompt_file = kwargs.get("prompt_file", "medrax/docs/system_prompts.txt")
-        
-        # Initialize agent as None, will be created in _setup
+        self.model_name = model_name
         self.agent = None
         self.tools_dict = None
         
@@ -53,71 +30,60 @@ class MedRAXProvider(LLMProvider):
     def _setup(self) -> None:
         """Set up MedRAX agent system."""
         try:
-            # Load system prompts
-            prompts = load_prompts_from_file(self.prompt_file)
-            prompt = prompts["MEDICAL_ASSISTANT"]
-            
-            # Initialize tools
-            all_tools = {
-                "TorchXRayVisionClassifierTool": lambda: TorchXRayVisionClassifierTool(device=self.device),
-                "ArcPlusClassifierTool": lambda: ArcPlusClassifierTool(cache_dir=self.model_dir, device=self.device),
-                "ChestXRaySegmentationTool": lambda: ChestXRaySegmentationTool(device=self.device),
-                "LlavaMedTool": lambda: LlavaMedTool(cache_dir=self.model_dir, device=self.device, load_in_8bit=True),
-                "XRayVQATool": lambda: XRayVQATool(cache_dir=self.model_dir, device=self.device),
-                "ChestXRayReportGeneratorTool": lambda: ChestXRayReportGeneratorTool(
-                    cache_dir=self.model_dir, device=self.device
-                ),
-                "XRayPhraseGroundingTool": lambda: XRayPhraseGroundingTool(
-                    cache_dir=self.model_dir, temp_dir=self.temp_dir, load_in_8bit=True, device=self.device
-                ),
-                "ChestXRayGeneratorTool": lambda: ChestXRayGeneratorTool(
-                    model_path=f"{self.model_dir}/roentgen", temp_dir=self.temp_dir, device=self.device
-                ),
-                "ImageVisualizerTool": lambda: ImageVisualizerTool(),
-                "DicomProcessorTool": lambda: DicomProcessorTool(temp_dir=self.temp_dir),
-                "MedicalRAGTool": lambda: RAGTool(config=self.rag_config) if self.rag_config else None,
-                "WebBrowserTool": lambda: WebBrowserTool(),
-            }
-            
-            # Add PythonSandboxTool if available
-            try:
-                all_tools["PythonSandboxTool"] = lambda: create_python_sandbox()
-            except Exception as e:
-                print(f"Warning: PythonSandboxTool not available: {e}")
-            
-            # Initialize selected tools
-            self.tools_dict = {}
-            for tool_name in self.tools_to_use:
-                if tool_name in all_tools:
-                    try:
-                        tool_instance = all_tools[tool_name]()
-                        if tool_instance is not None:
-                            self.tools_dict[tool_name] = tool_instance
-                    except Exception as e:
-                        print(f"Warning: Failed to initialize {tool_name}: {e}")
-            
-            # Set up checkpointing
-            checkpointer = MemorySaver()
-            
-            # Create the language model
-            llm = ModelFactory.create_model(
-                model_name=self.model_name,
-                temperature=self.temperature,
-                top_p=self.top_p
+            print("Starting server...")
+
+            selected_tools = [
+                "ImageVisualizerTool",  # For displaying images in the UI
+                # "DicomProcessorTool",  # For processing DICOM medical image files
+                # "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
+                # "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
+                # "ChestXRaySegmentationTool",  # For segmenting anatomical regions in chest X-rays
+                # "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
+                # "XRayVQATool",  # For visual question answering on X-rays
+                # "LlavaMedTool",  # For multimodal medical image understanding
+                # "XRayPhraseGroundingTool",  # For locating described features in X-rays
+                # "ChestXRayGeneratorTool",  # For generating synthetic chest X-rays
+                "WebBrowserTool",  # For web browsing and search capabilities
+                "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
+                "PythonSandboxTool",  # Add the Python sandbox tool
+            ]
+
+            rag_config = RAGConfig(
+                model="command-a-03-2025",  # Chat model for generating responses
+                embedding_model="embed-v4.0",  # Embedding model for the RAG system
+                rerank_model="rerank-v3.5",  # Reranking model for the RAG system
+                temperature=0.3,
+                pinecone_index_name="medrax2",  # Name for the Pinecone index
+                chunk_size=1500,
+                chunk_overlap=300,
+                retriever_k=7,
+                local_docs_dir="rag_docs",  # Change this to the path of the documents for RAG
+                huggingface_datasets=["VictorLJZ/medrax2"],  # List of HuggingFace datasets to load
+                dataset_split="train",  # Which split of the datasets to use
             )
-            
-            # Create the agent
-            self.agent = Agent(
-                llm,
-                tools=list(self.tools_dict.values()),
-                log_tools=False,  # Disable logging for benchmarking
-                system_prompt=prompt,
-                checkpointer=checkpointer,
-                debug=False,
-            )
-            
+
+            # Prepare any additional model-specific kwargs
+            model_kwargs = {}
+
             # Create temporary directory for this session
             self.session_temp_dir = Path(tempfile.mkdtemp(prefix="medrax_bench_"))
+
+            agent, tools_dict = initialize_agent(
+                prompt_file="medrax/docs/system_prompts.txt",
+                tools_to_use=selected_tools,
+                model_dir="/model-weights",
+                temp_dir=self.session_temp_dir,  # Change this to the path of the temporary directory
+                device="cuda",
+                model=self.model_name,  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
+                temperature=0.7,
+                top_p=0.95,
+                model_kwargs=model_kwargs,
+                rag_config=rag_config,
+                debug=True,
+            )
+            
+            self.agent = agent
+            self.tools_dict = tools_dict
             
             print(f"MedRAX agent initialized with tools: {list(self.tools_dict.keys())}")
             

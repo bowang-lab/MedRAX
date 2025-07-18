@@ -60,14 +60,6 @@ def run_benchmark_command(args) -> None:
     
     # Create LLM provider
     provider_kwargs = {}
-    if args.provider == "medrax":
-        provider_kwargs = {
-            "tools_to_use": args.medrax_tools.split(",") if args.medrax_tools else None,
-            "model_dir": args.model_dir,
-            "temp_dir": args.temp_dir,
-            "device": args.device,
-            "rag_config": None,  # You might want to add RAG config options
-        }
     
     llm_provider = create_llm_provider(args.model, args.provider, **provider_kwargs)
     
@@ -82,12 +74,8 @@ def run_benchmark_command(args) -> None:
         benchmark_name=args.benchmark,
         output_dir=args.output_dir,
         max_questions=args.max_questions,
-        start_index=args.start_index,
         temperature=args.temperature,
-        max_tokens=args.max_tokens,
-        system_prompt=args.system_prompt,
-        save_frequency=args.save_frequency,
-        log_level=args.log_level,
+        max_tokens=args.max_tokens
     )
     
     # Run benchmark
@@ -126,38 +114,10 @@ def main():
     run_parser.add_argument("--data-dir", required=True, help="Directory containing benchmark data")
     run_parser.add_argument("--output-dir", default="benchmark_results", help="Output directory for results")
     run_parser.add_argument("--max-questions", type=int, help="Maximum number of questions to process")
-    run_parser.add_argument("--start-index", type=int, default=0, help="Starting index for questions")
     run_parser.add_argument("--temperature", type=float, default=0.7, help="Model temperature")
     run_parser.add_argument("--max-tokens", type=int, default=1500, help="Maximum tokens per response")
-    run_parser.add_argument("--system-prompt", help="System prompt for the model")
-    run_parser.add_argument("--save-frequency", type=int, default=10, help="Save results every N questions")
-    run_parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
-    
-    # MedRAX-specific arguments
-    run_parser.add_argument("--medrax-tools", help="Comma-separated list of tools for MedRAX (e.g., WebBrowserTool,MedicalRAGTool)")
-    run_parser.add_argument("--model-dir", default="/model-weights", help="Directory containing model weights for MedRAX")
-    run_parser.add_argument("--temp-dir", default="temp", help="Temporary directory for MedRAX")
-    run_parser.add_argument("--device", default="cuda", help="Device for MedRAX models")
-    
-
     
     run_parser.set_defaults(func=run_benchmark_command)
-    
-    # Evaluate results command
-    eval_parser = subparsers.add_parser("evaluate", help="Evaluate benchmark results")
-    eval_parser.add_argument("results_files", nargs="+", help="Path(s) to results files")
-    eval_parser.add_argument("--output-dir", default="evaluation_results", help="Output directory for evaluation")
-    eval_parser.add_argument("--report-name", default="evaluation_report", help="Name for the evaluation report")
-    eval_parser.add_argument("--statistical-test", action="store_true", help="Run statistical significance tests")
-    eval_parser.set_defaults(func=evaluate_results_command)
-    
-    # List providers command
-    list_providers_parser = subparsers.add_parser("list-providers", help="List available LLM providers")
-    list_providers_parser.set_defaults(func=list_providers_command)
-    
-    # List benchmarks command
-    list_benchmarks_parser = subparsers.add_parser("list-benchmarks", help="List available benchmarks")
-    list_benchmarks_parser.set_defaults(func=list_benchmarks_command)
     
     args = parser.parse_args()
     

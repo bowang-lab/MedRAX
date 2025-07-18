@@ -1,10 +1,9 @@
 """Base class for LLM providers."""
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 import base64
-import time
 from pathlib import Path
 
 

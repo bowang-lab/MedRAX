@@ -9,14 +9,12 @@ The system uses OpenAI's language models for reasoning and can be configured
 with different model weights, tools, and parameters.
 """
 
-import os
 import warnings
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
 from transformers import logging
 
 from langgraph.checkpoint.memory import MemorySaver
-from langchain_openai import ChatOpenAI
 from medrax.models import ModelFactory
 
 from interface import create_demo
@@ -138,7 +136,7 @@ if __name__ == "__main__":
     # Example: initialize with only specific tools
     # Here three tools are commented out, you can uncomment them to use them
     selected_tools = [
-        # "ImageVisualizerTool",  # For displaying images in the UI
+        "ImageVisualizerTool",  # For displaying images in the UI
         # "DicomProcessorTool",  # For processing DICOM medical image files
         # "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
         # "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
@@ -171,14 +169,6 @@ if __name__ == "__main__":
 
     # Prepare any additional model-specific kwargs
     model_kwargs = {}
-
-    # Set up API keys for the web browser tool
-    # You'll need to set these environment variables:
-    # - GOOGLE_SEARCH_API_KEY: Your Google Custom Search API key
-    # - GOOGLE_SEARCH_ENGINE_ID: Your Google Custom Search Engine ID
-    # - COHERE_API_KEY: Your Cohere API key
-    # - OPENAI_API_KEY: Your OpenAI API key
-    # - PINECONE_API_KEY: Your Pinecone API key
 
     agent, tools_dict = initialize_agent(
         prompt_file="medrax/docs/system_prompts.txt",
