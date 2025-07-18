@@ -19,8 +19,11 @@ class ImageVisualizerInput(BaseModel):
     description: Optional[str] = Field(
         None, description="Optional description to display below the image"
     )
-    figsize: Optional[tuple] = Field(
-        (10, 10), description="Optional figure size as (width, height) in inches"
+    width: Optional[int] = Field(
+        10, description="Optional figure width in inches"
+    )
+    height: Optional[int] = Field(
+        10, description="Optional figure height in inches"
     )
     cmap: Optional[str] = Field(
         "rgb", description="Optional colormap to use for displaying the image"
@@ -43,11 +46,12 @@ class ImageVisualizerTool(BaseTool):
         image_path: str,
         title: Optional[str] = None,
         description: Optional[str] = None,
-        figsize: tuple = (10, 10),
+        width: int = 10,
+        height: int = 10,
         cmap: str = "rgb",
     ) -> None:
         """Display an image with optional annotations."""
-        plt.figure(figsize=figsize)
+        plt.figure(figsize=(width, height))
 
         img = skimage.io.imread(image_path)
         if len(img.shape) > 2 and cmap != "rgb":
@@ -74,7 +78,8 @@ class ImageVisualizerTool(BaseTool):
         image_path: str,
         title: Optional[str] = None,
         description: Optional[str] = None,
-        figsize: tuple = (10, 10),
+        width: int = 10,
+        height: int = 10,
         cmap: str = "rgb",
         run_manager: Optional[CallbackManagerForToolRun] = None,
     ) -> dict:
@@ -85,7 +90,8 @@ class ImageVisualizerTool(BaseTool):
             image_path: Path to the image file
             title: Optional title to display above image
             description: Optional description to display below image
-            figsize: Optional figure size as (width, height)
+            width: Optional figure width in inches
+            height: Optional figure height in inches
             cmap: Optional colormap to use for displaying the image
             run_manager: Optional callback manager
 
@@ -105,7 +111,8 @@ class ImageVisualizerTool(BaseTool):
                 "image_path": image_path,
                 "title": bool(title),
                 "description": bool(description),
-                "figsize": figsize,
+                "width": width,
+                "height": height,
                 "cmap": cmap,
                 "analysis_status": "completed",
             }
@@ -126,9 +133,10 @@ class ImageVisualizerTool(BaseTool):
         image_path: str,
         title: Optional[str] = None,
         description: Optional[str] = None,
-        figsize: tuple = (10, 10),
+        width: int = 10,
+        height: int = 10,
         cmap: str = "rgb",
         run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
     ) -> Tuple[Dict[str, any], Dict]:
         """Async version of _run."""
-        return self._run(image_path, title, description, figsize, cmap)
+        return self._run(image_path, title, description, width, height, cmap)
