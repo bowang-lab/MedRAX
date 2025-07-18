@@ -2,13 +2,10 @@
 
 import argparse
 import sys
-from pathlib import Path
-from typing import Dict, Any, Optional
 
 from .llm_providers import *
 from .benchmarks import *
 from .runner import BenchmarkRunner, BenchmarkRunConfig
-from .evaluation import BenchmarkEvaluator
 
 
 def create_llm_provider(model_name: str, provider_type: str, **kwargs) -> LLMProvider:
@@ -106,84 +103,14 @@ def run_benchmark_command(args) -> None:
         print(f"Error: {summary['error']}")
         return
     
-    print(f"Overall Accuracy: {summary['results']['accuracy']:.2f}%")
+    # Print results
+    print(f"Model: {args.model}")
+    print(f"Benchmark: {args.benchmark}")
     print(f"Total Questions: {summary['results']['total_questions']}")
     print(f"Correct Answers: {summary['results']['correct_answers']}")
+    print(f"Overall Accuracy: {summary['results']['accuracy']:.2f}%")
     print(f"Total Duration: {summary['results']['total_duration']:.2f}s")
     print(f"Results saved to: {summary['results_file']}")
-
-
-def evaluate_results_command(args) -> None:
-    """Evaluate benchmark results."""
-    print(f"Evaluating results: {args.results_files}")
-    
-    evaluator = BenchmarkEvaluator(args.output_dir)
-    
-    if len(args.results_files) == 1:
-        # Single model evaluation
-        evaluation = evaluator.evaluate_single_run(args.results_files[0])
-        print("\n" + "="*50)
-        print("SINGLE MODEL EVALUATION")
-        print("="*50)
-        print(f"Model: {evaluation.model_name}")
-        print(f"Benchmark: {evaluation.benchmark_name}")
-        print(f"Overall Accuracy: {evaluation.overall_accuracy:.2f}%")
-        print(f"Total Questions: {evaluation.total_questions}")
-        print(f"Error Rate: {evaluation.error_rate:.2f}%")
-        print(f"Total Duration: {evaluation.total_duration:.2f}s")
-        
-        if evaluation.category_accuracies:
-            print("\nCategory Accuracies:")
-            for category, accuracy in evaluation.category_accuracies.items():
-                print(f"  {category}: {accuracy:.2f}%")
-    
-    else:
-        # Multiple model comparison
-        comparison = evaluator.compare_models(args.results_files)
-        
-        if "error" in comparison:
-            print(f"Error: {comparison['error']}")
-            return
-        
-        print("\n" + "="*50)
-        print("MODEL COMPARISON")
-        print("="*50)
-        
-        summary = comparison["summary"]
-        print(f"Models Compared: {summary['models_compared']}")
-        print(f"Best Overall Accuracy: {summary['best_overall_accuracy']:.2f}%")
-        print(f"Accuracy Range: {summary['accuracy_range'][0]:.2f}% - {summary['accuracy_range'][1]:.2f}%")
-        
-        best_model = comparison["best_model"]
-        print(f"\nBest Model: {best_model['Model']} ({best_model['Accuracy (%)']:.2f}%)")
-        
-        # Generate comprehensive report
-        report_path = evaluator.generate_report(args.results_files, args.report_name)
-        print(f"\nDetailed report saved to: {report_path}")
-        
-        # Statistical significance test
-        if args.statistical_test:
-            print("\nRunning statistical significance tests...")
-            sig_results = evaluator.statistical_significance_test(args.results_files)
-            print(f"Found {len(sig_results['comparisons'])} pairwise comparisons")
-            
-            for comp in sig_results["comparisons"]:
-                significance = "significant" if comp["significant"] else "not significant"
-                print(f"{comp['model1']} vs {comp['model2']}: {significance} (p={comp['p_value']:.4f})")
-
-
-def list_providers_command(args) -> None:
-    """List available LLM providers."""
-    print("Available LLM Providers:")
-    print("- openai: OpenAI GPT models")
-    print("- google: Google Gemini models")
-    print("- medrax: MedRAX agent system")
-
-
-def list_benchmarks_command(args) -> None:
-    """List available benchmarks."""
-    print("Available Benchmarks:")
-    print("- rexvqa: ReXVQA (large-scale chest radiology VQA)")
 
 
 def main():
