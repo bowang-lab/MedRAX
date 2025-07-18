@@ -1,5 +1,5 @@
 <h1 align="center">
-🤖 MedRAX: Medical Reasoning Agent for Chest X-ray
+🤖 MedRAX-2: Medical Reasoning Agent for Chest X-ray
 </h1>
 <p align="center"> <a href="https://arxiv.org/abs/2502.02673" target="_blank"><img src="https://img.shields.io/badge/arXiv-ICML 2025-FF6B6B?style=for-the-badge&logo=arxiv&logoColor=white" alt="arXiv"></a> <a href="https://github.com/bowang-lab/MedRAX"><img src="https://img.shields.io/badge/GitHub-Code-4A90E2?style=for-the-badge&logo=github&logoColor=white" alt="GitHub"></a> <a href="https://huggingface.co/datasets/wanglab/chest-agent-bench"><img src="https://img.shields.io/badge/HuggingFace-Dataset-FFBF00?style=for-the-badge&logo=huggingface&logoColor=white" alt="HuggingFace Dataset"></a> </p>
 
@@ -22,7 +22,7 @@ MedRAX is built on a robust technical foundation:
 
 ### Integrated Tools
 - **Visual QA**: Utilizes CheXagent and LLaVA-Med for complex visual understanding and medical reasoning
-- **Segmentation**: Employs MedSAM and PSPNet model trained on ChestX-Det for precise anatomical structure identification
+- **Segmentation**: Employs MedSAM2 (advanced medical image segmentation) and PSPNet model trained on ChestX-Det for precise anatomical structure identification
 - **Grounding**: Uses Maira-2 for localizing specific findings in medical images
 - **Report Generation**: Implements SwinV2 Transformer trained on CheXpert Plus for detailed medical reporting
 - **Disease Classification**: Leverages DenseNet-121 from TorchXRayVision for detecting 18 pathology classes
@@ -232,10 +232,17 @@ XRayVQATool(
 ```
 - CheXagent weights download automatically
 
-### MedSAM Tool
+### MedSAM2 Tool
+```python
+MedSAM2Tool(
+    device=device, 
+    cache_dir=model_dir, 
+    temp_dir=temp_dir
+)
 ```
-Support for MedSAM segmentation will be added in a future update.
-```
+- Advanced medical image segmentation using MedSAM2 (adapted from Meta's SAM2)
+- Supports interactive prompting with box coordinates, point clicks, or automatic segmentation
+- Model weights automatically downloaded from HuggingFace (wanglab/MedSAM2)
 
 ### Python Sandbox Tool
 ```python

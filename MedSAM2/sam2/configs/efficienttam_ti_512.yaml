@@ -1,0 +1,120 @@
+# @package _global_
+
+# Model
+model:
+  _target_: efficient_track_anything.modeling.efficienttam_base.EfficientTAMBase
+  image_encoder:
+    _target_: efficient_track_anything.modeling.backbones.image_encoder.ImageEncoder
+    scalp: 0
+    trunk:
+      _target_: efficient_track_anything.modeling.backbones.vitdet.ViT
+      patch_size: 16
+      embed_dim: 192
+      depth: 12
+      num_heads: 3
+      mlp_ratio: 4.0
+      qkv_bias: true
+      drop_path_rate: 0.0
+      use_rel_pos: false
+      window_size: 14
+      window_block_indexes: [0, 1, 3, 4, 6, 7, 9, 10]
+    neck:
+      _target_: efficient_track_anything.modeling.backbones.image_encoder.ViTDetNeck
+      position_encoding:
+        _target_: efficient_track_anything.modeling.position_encoding.PositionEmbeddingSine
+        num_pos_feats: 256
+        normalize: true
+        scale: null
+        temperature: 10000
+      d_model: 256
+      backbone_channel_list: [192,]
+      neck_norm: LN
+
+  memory_attention:
+    _target_: efficient_track_anything.modeling.memory_attention.MemoryAttention
+    d_model: 256
+    pos_enc_at_input: true
+    layer:
+      _target_: efficient_track_anything.modeling.memory_attention.MemoryAttentionLayer
+      activation: relu
+      dim_feedforward: 2048
+      dropout: 0.1
+      pos_enc_at_attn: false
+      self_attention:
+        _target_: efficient_track_anything.modeling.sam.transformer.RoPEAttention
+        rope_theta: 10000.0
+        feat_sizes: [32, 32]
+        embedding_dim: 256
+        num_heads: 1
+        downsample_rate: 1
+        dropout: 0.1
+      d_model: 256
+      pos_enc_at_cross_attn_keys: true
+      pos_enc_at_cross_attn_queries: false
+      cross_attention:
+        _target_: efficient_track_anything.modeling.sam.transformer.RoPEAttention
+        rope_theta: 10000.0
+        feat_sizes: [32, 32]
+        rope_k_repeat: True
+        embedding_dim: 256
+        num_heads: 1
+        downsample_rate: 1
+        dropout: 0.1
+        kv_in_dim: 64
+    num_layers: 4
+
+  memory_encoder:
+      _target_: efficient_track_anything.modeling.memory_encoder.MemoryEncoder
+      out_dim: 64
+      position_encoding:
+        _target_: efficient_track_anything.modeling.position_encoding.PositionEmbeddingSine
+        num_pos_feats: 64
+        normalize: true
+        scale: null
+        temperature: 10000
+      mask_downsampler:
+        _target_: efficient_track_anything.modeling.memory_encoder.MaskDownSampler
+        kernel_size: 3
+        stride: 2
+        padding: 1
+      fuser:
+        _target_: efficient_track_anything.modeling.memory_encoder.Fuser
+        layer:
+          _target_: efficient_track_anything.modeling.memory_encoder.CXBlock
+          dim: 256
+          kernel_size: 7
+          padding: 3
+          layer_scale_init_value: 1e-6
+          use_dwconv: True  # depth-wise convs
+        num_layers: 2
+
+  num_maskmem: 7
+  image_size: 512
+  # apply scaled sigmoid on mask logits for memory encoder, and directly feed input mask as output mask
+  # SAM decoder
+  sigmoid_scale_for_mem_enc: 20.0
+  sigmoid_bias_for_mem_enc: -10.0
+  use_mask_input_as_output_without_sam: true
+  # Memory
+  directly_add_no_mem_embed: true
+  use_high_res_features_in_sam: false
+  # output 3 masks on the first click on initial conditioning frames
+  multimask_output_in_sam: true
+  # SAM heads
+  iou_prediction_use_sigmoid: True
+  # cross-attend to object pointers from other frames in the ViT encoder
+  use_obj_ptrs_in_encoder: true
+  add_tpos_enc_to_obj_ptrs: false
+  only_obj_ptrs_in_the_past_for_eval: true
+  # object occlusion prediction
+  pred_obj_scores: true
+  pred_obj_scores_mlp: true
+  fixed_no_obj_ptr: true
+  # multimask tracking settings
+  multimask_output_for_tracking: true
+  use_multimask_token_for_obj_ptr: true
+  multimask_min_pt_num: 0
+  multimask_max_pt_num: 1
+  use_mlp_for_obj_ptr_proj: true
+  # Compilation flag
+  compile_image_encoder: true
