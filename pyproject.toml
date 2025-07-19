@@ -21,6 +21,7 @@ dependencies = [
     "langchain-anthropic>=0.0.2",
     "langchain-cohere>=0.0.2",
     "langchain-chroma>=0.0.10",
+    "langchain-xai>=0.0.1",
     "langgraph>=0.0.10",
     "python-dotenv>=0.19.0",
     "pandas>=1.5.0",
