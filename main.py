@@ -65,6 +65,8 @@ def initialize_agent(
         ),
         "ImageVisualizerTool": lambda: ImageVisualizerTool(),
         "DicomProcessorTool": lambda: DicomProcessorTool(temp_dir=temp_dir),
+        "UltrasoundClassifierTool": lambda: UltrasoundClassifierTool(device=device), # Added
+        "UltrasoundSegmentationTool": lambda: UltrasoundSegmentationTool(device=device, temp_dir=temp_dir), # Added
     }
 
     # Initialize only selected tools or all if none specified
@@ -105,6 +107,8 @@ if __name__ == "__main__":
         "ChestXRaySegmentationTool",
         "ChestXRayReportGeneratorTool",
         "XRayVQATool",
+        "UltrasoundClassifierTool", # Added
+        "UltrasoundSegmentationTool", # Added
         # "LlavaMedTool",
         # "XRayPhraseGroundingTool",
         # "ChestXRayGeneratorTool",

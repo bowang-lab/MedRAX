@@ -27,10 +27,12 @@ class ChestXRaySegmentationInput(BaseModel):
     image_path: str = Field(..., description="Path to the chest X-ray image file to be segmented")
     organs: Optional[List[str]] = Field(
         None,
-        description="List of organs to segment. If None, all available organs will be segmented. "
-        "Available organs: Left/Right Clavicle, Left/Right Scapula, Left/Right Lung, "
-        "Left/Right Hilus Pulmonis, Heart, Aorta, Facies Diaphragmatica, "
-        "Mediastinum, Weasand, Spine",
+        description="List of organs/structures to segment. If None, all available core organs will be segmented. "
+        "Core available organs: Left/Right Clavicle, Left/Right Scapula, Left/Right Lung, "
+        "Left/Right Hilus Pulmonis, Heart, Aorta, Facies Diaphragmatica (diaphragm), "
+        "Mediastinum, Weasand (esophagus), Spine. "
+        "Additional structures like Ribs, Pleural Effusion, Consolidation, Nodule/Mass can be requested "
+        "but are currently STUBBED (not segmented by the current model) and will be noted in the output.",
     )
 
 
@@ -66,16 +68,21 @@ class ChestXRaySegmentationTool(BaseTool):
 
     name: str = "chest_xray_segmentation"
     description: str = (
-        "Segments chest X-ray images to specified anatomical structures. "
-        "Available organs: Left/Right Clavicle (collar bones), Left/Right Scapula (shoulder blades), "
-        "Left/Right Lung, Left/Right Hilus Pulmonis (lung roots), Heart, Aorta, "
-        "Facies Diaphragmatica (diaphragm), Mediastinum (central cavity), Weasand (esophagus), "
-        "and Spine. Returns segmentation visualization and comprehensive metrics. "
-        "Let the user know the area is not accurate unless input has been DICOM."
+        "Segments chest X-ray images for specified anatomical structures and some pathological findings. "
+        "Core structures supported by the current model: Left/Right Clavicle, Left/Right Scapula, "
+        "Left/Right Lung, Left/Right Hilus Pulmonis, Heart, Aorta, Facies Diaphragmatica (diaphragm), "
+        "Mediastinum, Weasand (esophagus), and Spine. "
+        "Segmentation for additional requested structures like Ribs, Pleural Effusion, Consolidation, or Nodule/Mass "
+        "is currently STUBBED (i.e., they will be acknowledged but not segmented, pending model update). "
+        "Returns a segmentation visualization (for supported structures) and comprehensive metrics. "
+        "Inform the user that area calculations are approximate unless the input was a DICOM with pixel spacing data."
     )
     args_schema: Type[BaseModel] = ChestXRaySegmentationInput
 
     model: Any = None
+    # Define which structures are supported by the current model vs stubbed
+    supported_organ_map_indices: Dict[str, int] = None
+    stubbed_organ_names: List[str] = None
     device: Optional[str] = "cuda"
     transform: Any = None
     pixel_spacing_mm: float = 0.2
@@ -97,23 +104,33 @@ class ChestXRaySegmentationTool(BaseTool):
         self.temp_dir = temp_dir if isinstance(temp_dir, Path) else Path(temp_dir)
         self.temp_dir.mkdir(exist_ok=True)
 
-        # Map friendly names to model target indices
-        self.organ_map = {
-            "Left Clavicle": 0,
-            "Right Clavicle": 1,
-            "Left Scapula": 2,
-            "Right Scapula": 3,
-            "Left Lung": 4,
-            "Right Lung": 5,
-            "Left Hilus Pulmonis": 6,
-            "Right Hilus Pulmonis": 7,
-            "Heart": 8,
-            "Aorta": 9,
-            "Facies Diaphragmatica": 10,
-            "Mediastinum": 11,
-            "Weasand": 12,
+        # Map friendly names to model target indices for PSPNet model
+        self.supported_organ_map_indices = {
+            "Left Clavicle": 0, "Right Clavicle": 1,
+            "Left Scapula": 2, "Right Scapula": 3,
+            "Left Lung": 4, "Right Lung": 5,
+            "Left Hilus Pulmonis": 6, "Right Hilus Pulmonis": 7,
+            "Heart": 8, "Aorta": 9,
+            "Facies Diaphragmatica": 10, # Diaphragm
+            "Mediastinum": 11, "Weasand": 12, # Esophagus
             "Spine": 13,
         }
+
+        # Define stubbed organs (requested but not supported by current model)
+        # These won't have an index in the current model output.
+        self.stubbed_organ_names = sorted([
+            "Ribs", # Anatomical, but not in PSPNet's 14
+            "Pleural Effusion", # Pathological
+            "Consolidation", # Pathological
+            "Nodule", # Pathological, often used interchangeably with Nodule/Mass
+            "Mass",   # Pathological
+            # Could add "Lung Lobes" here too if desired as a stub.
+        ])
+
+        # The overall organ_map for validation purposes includes all known, supported or stubbed
+        self.organ_map = {**self.supported_organ_map_indices,
+                            **{name: -1 for name in self.stubbed_organ_names}} # -1 indicates stub/no model index
+
 
     def _align_mask_to_original(
         self, mask: np.ndarray, original_shape: Tuple[int, int]
@@ -229,20 +246,164 @@ class ChestXRaySegmentationTool(BaseTool):
         run_manager: Optional[CallbackManagerForToolRun] = None,
     ) -> Tuple[Dict[str, Any], Dict]:
         """Run segmentation analysis for specified organs."""
+        requested_organs_list = organs # Keep original request for metadata
+        processed_organs_names = []
+        stubbed_organs_requested = []
+
         try:
-            # Validate and get organ indices
-            if organs:
+            # Validate and categorize requested organs
+            target_model_indices = [] # Indices for the PSPNet model
+            organs_for_model_processing = [] # Names corresponding to target_model_indices
+
+            if not organs: # If None, segment all supported structures
+                organs_for_model_processing = list(self.supported_organ_map_indices.keys())
+                target_model_indices = list(self.supported_organ_map_indices.values())
+                if not requested_organs_list: # If organs was initially None
+                    requested_organs_list = list(self.organ_map.keys()) # For metadata, show all known
+            else:
                 organs = [o.strip() for o in organs]
                 invalid_organs = [o for o in organs if o not in self.organ_map]
                 if invalid_organs:
-                    raise ValueError(f"Invalid organs specified: {invalid_organs}")
-                organ_indices = [self.organ_map[o] for o in organs]
-            else:
-                organ_indices = list(self.organ_map.values())
-                organs = list(self.organ_map.keys())
+                    raise ValueError(f"Invalid or unknown organs specified: {invalid_organs}. Valid options include {list(self.organ_map.keys())}.")
 
-            # Load and process image
-            original_img = skimage.io.imread(image_path)
+                for organ_name in organs:
+                    if organ_name in self.supported_organ_map_indices:
+                        organs_for_model_processing.append(organ_name)
+                        target_model_indices.append(self.supported_organ_map_indices[organ_name])
+                    elif organ_name in self.stubbed_organ_names:
+                        stubbed_organs_requested.append(organ_name)
+
+            if not organs_for_model_processing and not stubbed_organs_requested:
+                 # This case should ideally be caught by invalid_organs check if organs list was provided but empty of known items
+                raise ValueError("No valid organs specified for segmentation or all specified organs are currently stubbed and none are processable by the model.")
+
+            # Load and process image only if there are model-processable organs
+            if organs_for_model_processing:
+                original_img = skimage.io.imread(image_path)
+                if len(original_img.shape) > 2:
+                    original_img = original_img[:, :, 0]
+
+                img = xrv.datasets.normalize(original_img, 255)
+                img = img[None, ...]
+                img = self.transform(img)
+                img = torch.from_numpy(img)
+                img = img.to(self.device)
+
+                # Generate predictions
+                with torch.no_grad():
+                    pred = self.model(img)
+                pred_probs = torch.sigmoid(pred) # Sigmoid for multi-label segmentation
+                pred_masks = (pred_probs > 0.5).float()
+
+                # Save visualization
+                viz_path = self._save_visualization(original_img, pred_masks, target_model_indices)
+
+                # Compute metrics for selected organs that were processed by the model
+                results = {}
+                for organ_name, model_idx in zip(organs_for_model_processing, target_model_indices):
+                    mask = pred_masks[0, model_idx].cpu().numpy()
+                    if mask.sum() > 0:
+                        metrics = self._compute_organ_metrics(
+                            mask, original_img, float(pred_probs[0, model_idx].mean().cpu())
+                        )
+                        if metrics:
+                            results[organ_name] = metrics
+                            processed_organs_names.append(organ_name)
+
+                output_segmentation_path = viz_path
+                output_metrics = {organ: metrics.dict() for organ, metrics in results.items()}
+
+                # Attempt to calculate Cardiothoracic Ratio (CTR)
+                # CTR = Max Heart Width / Max Thoracic Width
+                heart_metrics = results.get("Heart")
+                left_lung_metrics = results.get("Left Lung")
+                right_lung_metrics = results.get("Right Lung")
+                ctr = None
+                ctr_calculation_note = "CTR calculation requires successful segmentation of Heart, Left Lung, and Right Lung."
+
+                if heart_metrics and left_lung_metrics and right_lung_metrics:
+                    heart_width_px = heart_metrics.width # width is bbox[3] - bbox[1] (max_x - min_x)
+
+                    # Approximate thoracic width using outer lung boundaries
+                    # Assumes standard patient orientation (Right lung is to the image right of Left lung)
+                    # bbox = (min_y, min_x, max_y, max_x)
+                    thoracic_width_px = right_lung_metrics.bbox[3] - left_lung_metrics.bbox[1]
+
+                    if thoracic_width_px > 0:
+                        ctr = heart_width_px / thoracic_width_px
+                        output_metrics["CardiothoracicRatio"] = {
+                            "value": round(ctr, 3) if ctr is not None else None,
+                            "heart_width_pixels": heart_width_px,
+                            "thoracic_width_pixels_approx": thoracic_width_px,
+                            "note": "Thoracic width is approximated from outer lung boundaries. For precise CTR, ensure accurate pixel_spacing and consider inner rib cage for thoracic width."
+                        }
+                        ctr_calculation_note = "CTR calculated."
+                        if self.pixel_spacing_mm == 0.2: # Default value
+                             output_metrics["CardiothoracicRatio"]["warning"] = "CTR calculated using default pixel spacing. For accuracy, ensure pixel_spacing_mm is set from DICOM."
+                    else:
+                        ctr_calculation_note = "Could not calculate CTR: thoracic width approximation was zero or invalid."
+                output_metrics["CTR_Calculation_Status"] = ctr_calculation_note
+
+
+            else: # No organs to process with the model, only stubbed ones requested
+                output_segmentation_path = None
+                output_metrics = {}
+                original_img_shape = None # Not loaded
+                model_img_shape = None # Not processed
+                # Try to get original image shape for metadata if possible without full load
+                try:
+                    img_info = skimage.io.info(image_path)
+                    original_img_shape = img_info.shape
+                except:
+                    original_img_shape = "Unknown (image not loaded for stubbed request)"
+
+
+            output = {
+                "segmentation_image_path": output_segmentation_path,
+                "metrics": output_metrics,
+            }
+            if stubbed_organs_requested:
+                output["note_stubbed_organs"] = (
+                    f"The following requested structures are currently stubbed and were not segmented: "
+                    f"{', '.join(stubbed_organs_requested)}. Model update is required for these."
+                )
+
+            metadata = {
+                "image_path": image_path,
+                "segmentation_image_path": output_segmentation_path,
+                "original_size": original_img.shape if 'original_img' in locals() else original_img_shape,
+                "model_size": tuple(img.shape[-2:]) if 'img' in locals() else model_img_shape,
+                "pixel_spacing_mm": self.pixel_spacing_mm,
+                "requested_organs_input": requested_organs_list if requested_organs_list else "All supported",
+                "processed_model_organs": organs_for_model_processing, # organs actually sent to model
+                "organs_with_metrics": processed_organs_names, # organs for which metrics were computed
+                "stubbed_organs_requested": stubbed_organs_requested,
+                "analysis_status": "completed",
+            }
+            if not organs_for_model_processing and stubbed_organs_requested:
+                 metadata["analysis_status"] = "completed_only_stubbed"
+
+
+            return output, metadata
+
+        except Exception as e:
+            error_output = {"error": str(e)}
+            error_metadata = {
+                "image_path": image_path,
+                "requested_organs_input": requested_organs_list if requested_organs_list else "All supported",
+                "analysis_status": "failed",
+                "error_traceback": traceback.format_exc(),
+            }
+            return error_output, error_metadata
+
+    async def _arun(
+        self,
+        image_path: str,
+        organs: Optional[List[str]] = None,
+        run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
+    ) -> Tuple[Dict[str, Any], Dict]:
+        """Async version of _run."""
+        return self._run(image_path, organs)
             if len(original_img.shape) > 2:
                 original_img = original_img[:, :, 0]
 
