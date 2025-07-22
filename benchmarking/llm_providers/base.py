@@ -14,7 +14,8 @@ class LLMRequest:
     text: str
     images: Optional[List[str]] = None  # List of image paths
     temperature: float = 0.7
-    max_tokens: int = 1500
+    top_p: float = 0.95
+    max_tokens: int = 5000
     additional_params: Optional[Dict[str, Any]] = None
 
 
@@ -47,7 +48,7 @@ class LLMProvider(ABC):
         # Always load system prompt from file
         try:
             prompts = load_prompts_from_file("medrax/docs/system_prompts.txt")
-            self.system_prompt = prompts.get("MEDICAL_ASSISTANT", None)
+            self.system_prompt = prompts.get("CHESTAGENTBENCH_PROMPT", None)
             if self.system_prompt is None:
                 print(f"Warning: System prompt type 'MEDICAL_ASSISTANT' not found in medrax/docs/system_prompts.txt.")
         except Exception as e:

@@ -71,12 +71,11 @@ class GoogleProvider(LLMProvider):
             # Update client parameters for this request
             self.client.temperature = request.temperature
             self.client.max_output_tokens = request.max_tokens
-            
-            if request.additional_params and "top_p" in request.additional_params:
-                self.client.top_p = request.additional_params["top_p"]
+            self.client.top_p = request.top_p
             
             response = self.client.invoke(messages)
-            
+            print(response)
+
             duration = time.time() - start_time
             
             # Extract response content

@@ -36,7 +36,8 @@ class BenchmarkRunConfig:
     output_dir: str
     max_questions: Optional[int] = None
     temperature: float = 0.7
-    max_tokens: int = 1500
+    top_p: float = 0.95
+    max_tokens: int = 5000
     additional_params: Optional[Dict[str, Any]] = None
 
 
@@ -167,14 +168,6 @@ class BenchmarkRunner:
         # Save final results
         summary = self._save_final_results(benchmark)
         
-        # Clean up provider resources
-        if hasattr(llm_provider, 'cleanup'):
-            try:
-                llm_provider.cleanup()
-                self.logger.info("Provider cleanup completed")
-            except Exception as e:
-                self.logger.warning(f"Provider cleanup failed: {e}")
-        
         self.logger.info(f"Benchmark run completed: {self.run_id}")
         self.logger.info(f"Final accuracy: {summary['results']['accuracy']:.2f}%")
         self.logger.info(f"Total duration: {summary['results']['total_duration']:.2f}s")
@@ -203,6 +196,7 @@ class BenchmarkRunner:
                 text=data_point.text,
                 images=data_point.images,
                 temperature=self.config.temperature,
+                top_p=self.config.top_p,
                 max_tokens=self.config.max_tokens,
                 additional_params=self.config.additional_params
             )
@@ -260,10 +254,14 @@ class BenchmarkRunner:
         Returns:
             str: The extracted answer
         """
+        # First, look for the 'Final answer: <|A|>' format
+        final_answer_pattern = r'Final answer:\s*<\|([A-F])\|>'
+        match = re.search(final_answer_pattern, response_text)
+        if match:
+            return match.group(1).upper()
+
         # This is a simple implementation - may need customization per benchmark
         # For multiple choice, look for single letters A, B, C, D, E, F
-        
-        # Look for patterns like "A", "B)", "(C)", "Answer: D", etc.
         patterns = [
             r'\b([A-F])\b',  # Single letter
             r'\b([A-F])\)',  # Letter with closing parenthesis

@@ -1,7 +1,6 @@
 """MedRAX LLM provider implementation."""
 
 import time
-import tempfile
 import shutil
 from pathlib import Path
 
@@ -65,14 +64,11 @@ class MedRAXProvider(LLMProvider):
             # Prepare any additional model-specific kwargs
             model_kwargs = {}
 
-            # Create temporary directory for this session
-            self.session_temp_dir = Path(tempfile.mkdtemp(prefix="medrax_bench_"))
-
             agent, tools_dict = initialize_agent(
                 prompt_file="medrax/docs/system_prompts.txt",
                 tools_to_use=selected_tools,
                 model_dir="/model-weights",
-                temp_dir=self.session_temp_dir,  # Change this to the path of the temporary directory
+                temp_dir="temp",  # Change this to the path of the temporary directory
                 device="cpu",
                 model=self.model_name,  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
                 temperature=0.7,
@@ -122,7 +118,7 @@ class MedRAXProvider(LLMProvider):
                 for i, image_path in enumerate(valid_images):
                     print(f"Original image path: {image_path}")
                     # Copy image to session temp directory
-                    dest_path = self.session_temp_dir / f"image_{i}_{Path(image_path).name}"
+                    dest_path = Path("temp") / f"image_{i}_{Path(image_path).name}"
                     print(f"Destination path: {dest_path}")
                     shutil.copy2(image_path, dest_path)
                     image_paths.append(str(dest_path))
@@ -189,16 +185,3 @@ class MedRAXProvider(LLMProvider):
                 duration=time.time() - start_time,
                 raw_response=None
             )
-
-    def _cleanup_temp_files(self) -> None:
-        """Clean up temporary files."""
-        try:
-            if hasattr(self, 'session_temp_dir') and self.session_temp_dir.exists():
-                shutil.rmtree(self.session_temp_dir)
-                print(f"Cleaned up temporary directory: {self.session_temp_dir}")
-        except Exception as e:
-            print(f"Warning: Failed to cleanup temp files: {e}")
-    
-    def cleanup(self) -> None:
-        """Clean up resources when done with the provider."""
-        self._cleanup_temp_files()

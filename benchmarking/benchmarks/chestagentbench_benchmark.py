@@ -1,7 +1,6 @@
-import os
 import json
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, Optional, Any
 from .base import Benchmark, BenchmarkDataPoint
 
 class ChestAgentBenchBenchmark(Benchmark):

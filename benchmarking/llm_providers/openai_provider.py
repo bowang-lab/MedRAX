@@ -2,7 +2,6 @@
 
 import os
 import time
-from typing import Dict, Any
 from tenacity import retry, wait_exponential, stop_after_attempt
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -81,9 +80,7 @@ class OpenAIProvider(LLMProvider):
             # Update client parameters for this request
             self.client.temperature = request.temperature
             self.client.max_tokens = request.max_tokens
-            
-            if request.additional_params and "top_p" in request.additional_params:
-                self.client.model_kwargs = {"top_p": request.additional_params["top_p"]}
+            self.client.top_p = request.top_p
             
             response = self.client.invoke(messages)
             

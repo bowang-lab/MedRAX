@@ -36,8 +36,8 @@ class ModelFactory:
             "default_base_url": "https://openrouter.ai/api/v1",
         },
         "grok": {
-        "class": ChatXAI,
-        "env_key": "XAI_API_KEY",
+            "class": ChatXAI,
+            "env_key": "XAI_API_KEY",
         }
         # Add more providers with default configurations here
     }

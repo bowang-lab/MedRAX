@@ -13,7 +13,7 @@ def create_llm_provider(model_name: str, provider_type: str, **kwargs) -> LLMPro
     
     Args:
         model_name (str): Name of the model
-        provider_type (str): Type of provider (openai, google, openrouter, medrax)
+        provider_type (str): Type of provider (openai, google, xai, medrax)
         **kwargs: Additional configuration parameters
         
     Returns:
@@ -22,6 +22,7 @@ def create_llm_provider(model_name: str, provider_type: str, **kwargs) -> LLMPro
     provider_map = {
         "openai": OpenAIProvider,
         "google": GoogleProvider,
+        "xai": XAIProvider,
         "medrax": MedRAXProvider,
     }
     
@@ -111,13 +112,13 @@ def main():
     # Run benchmark command
     run_parser = subparsers.add_parser("run", help="Run a benchmark")
     run_parser.add_argument("--model", required=True, help="Model name (e.g., gpt-4o, gemini-2.5-pro)")
-    run_parser.add_argument("--provider", required=True, choices=["openai", "google", "medrax"], help="LLM provider")
+    run_parser.add_argument("--provider", required=True, choices=["openai", "google", "xai", "medrax"], help="LLM provider")
     run_parser.add_argument("--benchmark", required=True, choices=["rexvqa", "chestagentbench"], help="Benchmark to run")
     run_parser.add_argument("--data-dir", required=True, help="Directory containing benchmark data")
     run_parser.add_argument("--output-dir", default="benchmark_results", help="Output directory for results")
     run_parser.add_argument("--max-questions", type=int, help="Maximum number of questions to process")
     run_parser.add_argument("--temperature", type=float, default=0.7, help="Model temperature")
-    run_parser.add_argument("--max-tokens", type=int, default=1500, help="Maximum tokens per response")
+    run_parser.add_argument("--max-tokens", type=int, default=5000, help="Maximum tokens per response")
     
     run_parser.set_defaults(func=run_benchmark_command)
     
