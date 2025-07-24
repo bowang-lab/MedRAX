@@ -4,6 +4,7 @@ from .base import LLMProvider, LLMRequest, LLMResponse
 from .openai_provider import OpenAIProvider
 from .google_provider import GoogleProvider
 from .medrax_provider import MedRAXProvider
+from .openrouter_provider import OpenRouterProvider
 
 __all__ = [
     "LLMProvider",
@@ -12,4 +13,5 @@ __all__ = [
     "OpenAIProvider", 
     "GoogleProvider",
     "MedRAXProvider",
+    "OpenRouterProvider",
 ] 
