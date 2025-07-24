@@ -2,11 +2,10 @@
 
 import json
 import os
-from pathlib import Path
 from typing import Dict, List, Optional, Any
 from datasets import load_dataset
 from .base import Benchmark, BenchmarkDataPoint
-import hashlib
+from pathlib import Path
 
 
 class ReXVQABenchmark(Benchmark):
@@ -19,7 +18,7 @@ class ReXVQABenchmark(Benchmark):
     
     The dataset consists of two separate HuggingFace datasets:
     - ReXVQA: Contains questions, answers, and metadata
-    - ReXGradient-160K: Contains the actual chest X-ray images
+    - ReXGradient-160K: Contains metadata only (images are in separate part files)
     
     Paper: https://arxiv.org/abs/2506.04353
     Dataset: https://huggingface.co/datasets/rajpurkarlab/ReXVQA
@@ -36,11 +35,13 @@ class ReXVQABenchmark(Benchmark):
                 cache_dir (str): Directory for caching HuggingFace datasets
                 trust_remote_code (bool): Whether to trust remote code (default: False)
                 max_questions (int): Maximum number of questions to load (default: None, load all)
+                images_dir (str): Directory containing extracted PNG images (default: None)
         """
         self.split = kwargs.get("split", "test")
         self.cache_dir = kwargs.get("cache_dir", None)
         self.trust_remote_code = kwargs.get("trust_remote_code", False)
         self.max_questions = kwargs.get("max_questions", None)
+        self.images_dir = "benchmarking/data/rexvqa/images/deid_png"
         self.image_dataset = None
         self.image_mapping = {}  # Maps study_id to image data
         
@@ -50,7 +51,7 @@ class ReXVQABenchmark(Benchmark):
         """Load ReXVQA data from local JSON file."""
         try:
             # Construct path to the JSON file
-            json_file_path = os.path.join("benchmarking", "data", "test_vqa_data.json")
+            json_file_path = os.path.join("benchmarking", "data", "rexvqa", "test_vqa_data.json")
             
             # Check if file exists
             if not os.path.exists(json_file_path):
@@ -71,8 +72,8 @@ class ReXVQABenchmark(Benchmark):
             
             print(f"Loaded {len(questions_list)} questions from local JSON file")
             
-            # Load images dataset from ReXGradient-160K
-            print("Loading ReXGradient-160K images dataset...")
+            # Load images dataset from ReXGradient-160K (metadata only)
+            print("Loading ReXGradient-160K metadata dataset...")
             try:
                 self.image_dataset = load_dataset(
                     "rajpurkarlab/ReXGradient-160K",
@@ -80,9 +81,9 @@ class ReXVQABenchmark(Benchmark):
                     cache_dir=self.cache_dir,
                     trust_remote_code=self.trust_remote_code
                 )
-                print(f"Loaded {len(self.image_dataset)} images from ReXGradient-160K")
+                print(f"Loaded {len(self.image_dataset)} image metadata entries from ReXGradient-160K")
                 
-                # Create mapping from study_id to image data
+                # Create mapping from study_id to image metadata
                 self._create_image_mapping()
                 
             except Exception as e:
@@ -111,7 +112,7 @@ class ReXVQABenchmark(Benchmark):
             raise RuntimeError(f"Failed to load ReXVQA dataset: {e}")
 
     def _create_image_mapping(self) -> None:
-        """Create mapping from study_id to image data."""
+        """Create mapping from study_id to image metadata."""
         if not self.image_dataset:
             return
             
@@ -120,7 +121,7 @@ class ReXVQABenchmark(Benchmark):
         for item in self.image_dataset:
             study_instance_uid = item.get("StudyInstanceUid", "")
             if study_instance_uid:
-                # Store the image data for this study using StudyInstanceUid as key
+                # Store the image metadata for this study using StudyInstanceUid as key
                 if study_instance_uid not in self.image_mapping:
                     self.image_mapping[study_instance_uid] = []
                 self.image_mapping[study_instance_uid].append(item)
@@ -152,39 +153,26 @@ class ReXVQABenchmark(Benchmark):
         # Get correct answer 
         correct_answer = item.get("correct_answer", "")
         
-        # If we have options and a letter answer, get the full text
-        if options and correct_answer and len(correct_answer) == 1:
-            try:
-                # Find the option that starts with the correct letter
-                for option in options:
-                    if option.strip().startswith(f"{correct_answer}."):
-                        correct_answer = option.strip()
-                        break
-            except:
-                pass  # Keep the original letter if parsing fails
-        
         if not question:
             return None
         
-        # Handle images - look for ImagePath field
+        # Handle images using ImagePath field
         images = None
-        image_paths = item.get("ImagePath", [])
-        study_id = item.get("study_id", "")
-        study_instance_uid = item.get("StudyInstanceUid", "")
-        
-        if image_paths:
-            # Use local image paths if available
-            images = [str(Path(path)) for path in image_paths if path]
-        elif study_instance_uid and study_instance_uid in self.image_mapping:
-            # Use StudyInstanceUid for matching with HuggingFace images
-            images = self._get_images_for_study(study_instance_uid, question_id)
+        if self.images_dir and "ImagePath" in item and item["ImagePath"]:
+            images = []
+            for rel_path in item["ImagePath"]:
+                # Remove leading ../ if present
+                norm_rel_path = rel_path.lstrip("./")
+                # Join with images_dir root
+                full_path = str(Path(self.images_dir).parent / norm_rel_path)
+                images.append(full_path)
         
         # Extract metadata
         metadata = {
             "dataset": "rexvqa",
             "split": self.split,
-            "study_id": study_id,
-            "study_instance_uid": study_instance_uid,
+            "study_id": item.get("study_id", ""),
+            "study_instance_uid": item.get("StudyInstanceUid", ""),
             "reasoning_type": item.get("task_name", ""),  # task_name maps to reasoning_type
             "category": item.get("category", ""),
             "class": item.get("class", ""),
@@ -201,12 +189,9 @@ class ReXVQABenchmark(Benchmark):
             "correct_answer_explanation": item.get("correct_answer_explanation", ""),
         }
         
-        # Determine category from task_name or category field
-        category = item.get("task_name", item.get("category", ""))
-        
-        # Use study_id as case_id for grouping related questions (keep using compound study_id for grouping)
-        case_id = study_id
-        
+        case_id = item.get("study_id", "")
+        category = item.get("task_name", "")
+
         return BenchmarkDataPoint(
             id=question_id,
             text=question_with_options,
@@ -216,65 +201,3 @@ class ReXVQABenchmark(Benchmark):
             case_id=case_id,
             category=category,
         )
-
-    def _get_images_for_study(self, study_instance_uid: str, question_id: str) -> Optional[List[str]]:
-        """Get images for a specific study and save them locally.
-        
-        Args:
-            study_instance_uid (str): Study Instance UID
-            question_id (str): Question ID for filename
-            
-        Returns:
-            Optional[List[str]]: List of image paths
-        """
-        if study_instance_uid not in self.image_mapping:
-            return None
-        
-        images = []
-        study_images = self.image_mapping[study_instance_uid]
-        
-        # Create images directory if it doesn't exist
-        images_dir = self.data_dir / "images"
-        images_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Get every image for the study
-        if not images and study_images:
-            for img_data in study_images:
-                image_path = self._save_image(img_data, question_id, images_dir)
-                if image_path:
-                    images.append(image_path)
-        
-        return images if images else None
-
-    def _save_image(self, img_data: Dict[str, Any], question_id: str, images_dir) -> Optional[str]:
-        """Save image data to local file.
-        
-        Args:
-            img_data (Dict[str, Any]): Image data from dataset
-            question_id (str): Question ID for filename
-            images_dir: Directory to save images
-            
-        Returns:
-            Optional[str]: Path to saved image
-        """
-        try:
-            # Get the image from the dataset item
-            image = img_data.get("image")
-            if image is None:
-                return None
-            
-            # Generate filename using StudyInstanceUid
-            study_instance_uid = img_data.get("StudyInstanceUid", "")
-            filename_hash = hashlib.md5(f"{question_id}_{study_instance_uid}".encode()).hexdigest()[:8]
-            image_filename = f"{question_id}_{filename_hash}.png"
-            image_path = images_dir / image_filename
-            
-            # Save image if it doesn't exist
-            if not image_path.exists():
-                image.save(str(image_path))
-                
-            return str(image_path)
-            
-        except Exception as e:
-            print(f"Error saving image for question {question_id}: {e}")
-            return None
