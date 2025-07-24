@@ -74,7 +74,6 @@ class GoogleProvider(LLMProvider):
             self.client.top_p = request.top_p
             
             response = self.client.invoke(messages)
-            print(response)
 
             duration = time.time() - start_time
             

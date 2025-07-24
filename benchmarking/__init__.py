@@ -1,3 +1,1 @@
-"""Benchmarking pipeline for MedRAX and other medical AI models."""
-
-__version__ = "1.0.0" 
+"""Benchmarking pipeline for MedRAX2 and other medical AI models."""

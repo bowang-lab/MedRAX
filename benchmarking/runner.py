@@ -254,34 +254,14 @@ class BenchmarkRunner:
         Returns:
             str: The extracted answer
         """
-        # First, look for the 'Final answer: <|A|>' format
-        final_answer_pattern = r'Final answer:\s*<\|([A-F])\|>'
+        # First, look for the '<|A|>' format
+        final_answer_pattern = r'\s*<\|([A-F])\|>'
         match = re.search(final_answer_pattern, response_text)
         if match:
             return match.group(1).upper()
-
-        # This is a simple implementation - may need customization per benchmark
-        # For multiple choice, look for single letters A, B, C, D, E, F
-        patterns = [
-            r'\b([A-F])\b',  # Single letter
-            r'\b([A-F])\)',  # Letter with closing parenthesis
-            r'\(([A-F])\)',  # Letter in parentheses
-            r'[Aa]nswer\s*:?\s*([A-F])',  # "Answer: X" format
-            r'[Cc]hoice\s*:?\s*([A-F])',  # "Choice: X" format
-        ]
         
-        for pattern in patterns:
-            match = re.search(pattern, response_text)
-            if match:
-                return match.group(1).upper()
-        
-        # If no pattern matches, return the first letter found
-        letters = re.findall(r'\b[A-F]\b', response_text)
-        if letters:
-            return letters[0].upper()
-        
-        # If no letters found, return the full response (truncated)
-        return response_text.strip()[:100]
+        # If no pattern matches, return the full response
+        return response_text.strip()
 
     def _is_correct_answer(self, model_answer: str, correct_answer: str) -> bool:
         """Check if the model answer is correct.
