@@ -50,7 +50,7 @@ class LLMProvider(ABC):
             prompts = load_prompts_from_file("medrax/docs/system_prompts.txt")
             self.system_prompt = prompts.get("CHESTAGENTBENCH_PROMPT", None)
             if self.system_prompt is None:
-                print(f"Warning: System prompt type 'MEDICAL_ASSISTANT' not found in medrax/docs/system_prompts.txt.")
+                print(f"Warning: System prompt not found in medrax/docs/system_prompts.txt.")
         except Exception as e:
             print(f"Error loading system prompt: {e}")
             self.system_prompt = None
