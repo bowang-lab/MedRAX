@@ -72,6 +72,8 @@ dependencies = [
     "langchain-google-genai>=0.1.0",
     "ray>=2.9.0",
     "langchain-sandbox>=0.0.6",
+    "seaborn>=0.12.0",
+    "huggingface_hub>=0.17.0",
     "iopath>=0.1.10",
 ]
 

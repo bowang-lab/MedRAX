@@ -28,7 +28,11 @@ class ModelFactory:
             "env_key": "OPENAI_API_KEY",
             "base_url_key": "OPENAI_BASE_URL",
         },
-        "gemini": {"class": ChatGoogleGenerativeAI, "env_key": "GOOGLE_API_KEY"},
+        "gemini": {
+            "class": ChatGoogleGenerativeAI, 
+            "env_key": "GOOGLE_API_KEY",
+            "base_url_key": "GOOGLE_BASE_URL",
+        },
         "openrouter": {
             "class": ChatOpenAI,  # OpenRouter uses OpenAI-compatible interface
             "env_key": "OPENROUTER_API_KEY",
@@ -36,8 +40,8 @@ class ModelFactory:
             "default_base_url": "https://openrouter.ai/api/v1",
         },
         "grok": {
-        "class": ChatXAI,
-        "env_key": "XAI_API_KEY",
+            "class": ChatXAI,
+            "env_key": "XAI_API_KEY",
         }
         # Add more providers with default configurations here
     }

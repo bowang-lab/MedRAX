@@ -9,7 +9,6 @@ The system uses OpenAI's language models for reasoning and can be configured
 with different model weights, tools, and parameters.
 """
 
-import os
 import warnings
 from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
@@ -174,14 +173,6 @@ if __name__ == "__main__":
 
     # Prepare any additional model-specific kwargs
     model_kwargs = {}
-
-    # Set up API keys for the web browser tool
-    # You'll need to set these environment variables:
-    # - GOOGLE_SEARCH_API_KEY: Your Google Custom Search API key
-    # - GOOGLE_SEARCH_ENGINE_ID: Your Google Custom Search Engine ID
-    # - COHERE_API_KEY: Your Cohere API key
-    # - OPENAI_API_KEY: Your OpenAI API key
-    # - PINECONE_API_KEY: Your Pinecone API key
 
     agent, tools_dict = initialize_agent(
         prompt_file="medrax/docs/system_prompts.txt",

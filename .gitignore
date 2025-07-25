@@ -176,3 +176,5 @@ temp/
 hf_files/
 medrax-pdfs/
 model-weights/
+
+.DS_Store
