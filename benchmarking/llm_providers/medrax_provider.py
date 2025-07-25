@@ -13,18 +13,19 @@ from main import initialize_agent
 class MedRAXProvider(LLMProvider):
     """MedRAX LLM provider that uses the full MedRAX agent system."""
 
-    def __init__(self, model_name: str, **kwargs):
+    def __init__(self, model_name: str, system_prompt: str, **kwargs):
         """Initialize MedRAX provider.
         
         Args:
             model_name (str): Base LLM model name (e.g., "gpt-4.1-2025-04-14")
+            system_prompt (str): System prompt to use
             **kwargs: Additional configuration parameters
         """
         self.model_name = model_name
         self.agent = None
         self.tools_dict = None
-        
-        super().__init__(model_name, **kwargs)
+
+        super().__init__(model_name, system_prompt, **kwargs)
 
     def _setup(self) -> None:
         """Set up MedRAX agent system."""
@@ -75,6 +76,7 @@ class MedRAXProvider(LLMProvider):
                 top_p=0.95,
                 model_kwargs=model_kwargs,
                 rag_config=rag_config,
+                system_prompt=self.prompt_name,
                 debug=True,
             )
             
