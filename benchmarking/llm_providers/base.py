@@ -35,22 +35,24 @@ class LLMProvider(ABC):
     text + image input -> text output across different models and APIs.
     """
 
-    def __init__(self, model_name: str, **kwargs):
+    def __init__(self, model_name: str, system_prompt: str, **kwargs):
         """Initialize the LLM provider.
         
         Args:
             model_name (str): Name of the model to use
+            system_prompt (str): System prompt identifier to load from file
             **kwargs: Additional configuration parameters
         """
         self.model_name = model_name
         self.config = kwargs
+        self.prompt_name = system_prompt  # Store the original prompt identifier
         
-        # Always load system prompt from file
+        # Load system prompt content from file
         try:
             prompts = load_prompts_from_file("medrax/docs/system_prompts.txt")
-            self.system_prompt = prompts.get("CHESTAGENTBENCH_PROMPT", None)
+            self.system_prompt = prompts.get(system_prompt, None)
             if self.system_prompt is None:
-                print(f"Warning: System prompt not found in medrax/docs/system_prompts.txt.")
+                print(f"Warning: System prompt '{system_prompt}' not found in medrax/docs/system_prompts.txt.")
         except Exception as e:
             print(f"Error loading system prompt: {e}")
             self.system_prompt = None
