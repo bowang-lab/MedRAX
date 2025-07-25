@@ -23,7 +23,6 @@ def create_llm_provider(model_name: str, provider_type: str, **kwargs) -> LLMPro
         "openai": OpenAIProvider,
         "google": GoogleProvider,
         "openrouter": OpenRouterProvider,
-        "anthropic": AnthropicProvider,
         "medrax": MedRAXProvider,
     }
     
@@ -114,7 +113,7 @@ def main():
     # Run benchmark command
     run_parser = subparsers.add_parser("run", help="Run a benchmark")
     run_parser.add_argument("--model", required=True, help="Model name (e.g., gpt-4o, gemini-2.5-pro)")
-    run_parser.add_argument("--provider", required=True, choices=["openai", "google", "openrouter", "anthropic", "medrax"], help="LLM provider")
+    run_parser.add_argument("--provider", required=True, choices=["openai", "google", "openrouter", "medrax"], help="LLM provider")
     run_parser.add_argument("--benchmark", required=True, choices=["rexvqa", "chestagentbench"], help="Benchmark to run")
     run_parser.add_argument("--data-dir", required=True, help="Directory containing benchmark data")
     run_parser.add_argument("--output-dir", default="benchmark_results", help="Output directory for results")
