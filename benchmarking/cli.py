@@ -13,7 +13,7 @@ def create_llm_provider(model_name: str, provider_type: str, **kwargs) -> LLMPro
     
     Args:
         model_name (str): Name of the model
-        provider_type (str): Type of provider (openai, google, openrouter, anthropic, medrax)
+        provider_type (str): Type of provider (openai, google, openrouter, medrax)
         **kwargs: Additional configuration parameters
         
     Returns:
