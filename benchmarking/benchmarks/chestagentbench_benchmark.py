@@ -33,7 +33,8 @@ class ChestAgentBenchBenchmark(Benchmark):
                     continue
         
         # Shuffle the final data
-        random.shuffle(self.data_points, seed=42)
+        random.seed(42)
+        random.shuffle(self.data_points)
 
     def _parse_item(self, item: Dict[str, Any], index: int) -> Optional[BenchmarkDataPoint]:
         # Use full_question_id or question_id if available, else fallback
