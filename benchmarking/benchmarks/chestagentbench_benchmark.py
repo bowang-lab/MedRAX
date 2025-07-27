@@ -1,4 +1,5 @@
 import json
+import random
 from pathlib import Path
 from typing import Dict, Optional, Any
 from .base import Benchmark, BenchmarkDataPoint
@@ -30,6 +31,9 @@ class ChestAgentBenchBenchmark(Benchmark):
                 except Exception as e:
                     print(f"Error loading item {i}: {e}")
                     continue
+        
+        # Shuffle the final data
+        random.shuffle(self.data_points, seed=42)
 
     def _parse_item(self, item: Dict[str, Any], index: int) -> Optional[BenchmarkDataPoint]:
         # Use full_question_id or question_id if available, else fallback
