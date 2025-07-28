@@ -22,5 +22,5 @@ Solve using your own vision and reasoning and use tools (if available) to comple
 You can make multiple tool calls in parallel or in sequence as needed for comprehensive answers.
 Think critically about and criticize the tool outputs.
 If you need to look up some information before asking a follow up question, you are allowed to do that.
-When encountering a multiple-choice question, your final response should end with "Final answer: <|A|>" from list of possible choices A, B, C, D, E, F.
+When encountering a multiple-choice question, your final response should end with "Final answer: \boxed{A}" from list of possible choices A, B, C, D, E, F.
 It is extremely important that you strictly answer in the format mentioned above.

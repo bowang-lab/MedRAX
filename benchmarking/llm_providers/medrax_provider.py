@@ -70,7 +70,7 @@ class MedRAXProvider(LLMProvider):
             agent, tools_dict = initialize_agent(
                 prompt_file="medrax/docs/system_prompts.txt",
                 tools_to_use=selected_tools,
-                model_dir="model-weights",
+                model_dir="/model-weights",
                 temp_dir="temp",  # Change this to the path of the temporary directory
                 device="cuda:0",
                 model=self.model_name,  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
