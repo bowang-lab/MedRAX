@@ -48,14 +48,14 @@ class RAGTool(BaseTool):
         self.rag = CohereRAG(config)
         self.chain = self.rag.initialize_rag(with_memory=True)
 
-    def _run(self, query: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    def _run(self, query: str) -> Tuple[Dict[str, Any], Dict]:
         """Execute the RAG tool with the given query.
 
         Args:
             query (str): Medical question to answer
 
         Returns:
-            Tuple[Dict[str, Any], Dict[str, Any]]: Output dictionary and metadata dictionary
+            Tuple[Dict[str, Any], Dict]: Output dictionary and metadata dictionary
         """
         try:
             result = self.chain.invoke({"query": query})
@@ -87,14 +87,14 @@ class RAGTool(BaseTool):
             }
             return output, metadata
 
-    async def _arun(self, query: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    async def _arun(self, query: str) -> Tuple[Dict[str, Any], Dict]:
         """Async version of _run.
 
         Args:
             query (str): Medical question to answer
 
         Returns:
-            Tuple[Dict[str, Any], Dict[str, Any]]: Output dictionary and metadata dictionary
+            Tuple[Dict[str, Any], Dict]: Output dictionary and metadata dictionary
 
         Raises:
             NotImplementedError: Async not implemented yet

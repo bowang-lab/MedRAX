@@ -139,8 +139,8 @@ def main():
                            help="Model temperature for response generation (default: 0.7)")
     run_parser.add_argument("--top-p", type=float, default=0.95, 
                            help="Top-p nucleus sampling parameter (default: 0.95)")
-    run_parser.add_argument("--max-tokens", type=int, default=1000, 
-                           help="Maximum tokens per model response (default: 1000)")
+    run_parser.add_argument("--max-tokens", type=int, default=5000, 
+                           help="Maximum tokens per model response (default: 5000)")
     
     run_parser.set_defaults(func=run_benchmark_command)
     

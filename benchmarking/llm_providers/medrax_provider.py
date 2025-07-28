@@ -33,19 +33,19 @@ class MedRAXProvider(LLMProvider):
             print("Starting server...")
 
             selected_tools = [
-                # "ImageVisualizerTool",  # For displaying images in the UI
-                # "DicomProcessorTool",  # For processing DICOM medical image files
-                # "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
+                "ImageVisualizerTool",  # For displaying images in the UI
+                "DicomProcessorTool",  # For processing DICOM medical image files
+                "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
                 # "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
-                # "ChestXRaySegmentationTool",  # For segmenting anatomical regions in chest X-rays
-                # "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
-                # "XRayVQATool",  # For visual question answering on X-rays
-                # "LlavaMedTool",  # For multimodal medical image understanding
-                # "XRayPhraseGroundingTool",  # For locating described features in X-rays
+                "ChestXRaySegmentationTool",  # For segmenting anatomical regions in chest X-rays
+                "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
+                "XRayVQATool",  # For visual question answering on X-rays
+                "LlavaMedTool",  # For multimodal medical image understanding
+                "XRayPhraseGroundingTool",  # For locating described features in X-rays
                 # "ChestXRayGeneratorTool",  # For generating synthetic chest X-rays
                 "WebBrowserTool",  # For web browsing and search capabilities
                 "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
-                # "PythonSandboxTool",  # Add the Python sandbox tool
+                "PythonSandboxTool",  # Add the Python sandbox tool
             ]
 
             rag_config = RAGConfig(
@@ -68,7 +68,7 @@ class MedRAXProvider(LLMProvider):
             agent, tools_dict = initialize_agent(
                 prompt_file="medrax/docs/system_prompts.txt",
                 tools_to_use=selected_tools,
-                model_dir="/model-weights",
+                model_dir="model-weights",
                 temp_dir="temp",  # Change this to the path of the temporary directory
                 device="cpu",
                 model=self.model_name,  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
