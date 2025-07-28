@@ -35,19 +35,19 @@ class MedRAXProvider(LLMProvider):
             print("Starting server...")
 
             selected_tools = [
-                "ImageVisualizerTool",  # For displaying images in the UI
-                "DicomProcessorTool",  # For processing DICOM medical image files
+                # "ImageVisualizerTool",  # For displaying images in the UI
+                # "DicomProcessorTool",  # For processing DICOM medical image files
                 "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
-                # "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
-                "ChestXRaySegmentationTool",  # For segmenting anatomical regions in chest X-rays
+                "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
+                # "ChestXRaySegmentationTool",  # For segmenting anatomical regions in chest X-rays
                 "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
                 "XRayVQATool",  # For visual question answering on X-rays
-                "LlavaMedTool",  # For multimodal medical image understanding
+                # "LlavaMedTool",  # For multimodal medical image understanding
                 "XRayPhraseGroundingTool",  # For locating described features in X-rays
                 # "ChestXRayGeneratorTool",  # For generating synthetic chest X-rays
                 "WebBrowserTool",  # For web browsing and search capabilities
                 "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
-                "PythonSandboxTool",  # Add the Python sandbox tool
+                # "PythonSandboxTool",  # Add the Python sandbox tool
             ]
 
             rag_config = RAGConfig(
@@ -58,7 +58,7 @@ class MedRAXProvider(LLMProvider):
                 pinecone_index_name="medrax2",  # Name for the Pinecone index
                 chunk_size=1500,
                 chunk_overlap=300,
-                retriever_k=7,
+                retriever_k=3,
                 local_docs_dir="rag_docs",  # Change this to the path of the documents for RAG
                 huggingface_datasets=["VictorLJZ/medrax2"],  # List of HuggingFace datasets to load
                 dataset_split="train",  # Which split of the datasets to use
@@ -72,9 +72,9 @@ class MedRAXProvider(LLMProvider):
                 tools_to_use=selected_tools,
                 model_dir="model-weights",
                 temp_dir="temp",  # Change this to the path of the temporary directory
-                device="cpu",
+                device="cuda:0",
                 model=self.model_name,  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
-                temperature=0.7,
+                temperature=0.3,
                 top_p=0.95,
                 model_kwargs=model_kwargs,
                 rag_config=rag_config,
