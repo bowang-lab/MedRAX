@@ -2,9 +2,11 @@
 
 import time
 import shutil
+import re
 from pathlib import Path
 
 from .base import LLMProvider, LLMRequest, LLMResponse
+from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from medrax.rag.rag import RAGConfig
 from main import initialize_agent
@@ -33,19 +35,19 @@ class MedRAXProvider(LLMProvider):
             print("Starting server...")
 
             selected_tools = [
-                # "ImageVisualizerTool",  # For displaying images in the UI
-                # "DicomProcessorTool",  # For processing DICOM medical image files
-                # "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
+                "ImageVisualizerTool",  # For displaying images in the UI
+                "DicomProcessorTool",  # For processing DICOM medical image files
+                "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
                 # "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
-                # "ChestXRaySegmentationTool",  # For segmenting anatomical regions in chest X-rays
-                # "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
-                # "XRayVQATool",  # For visual question answering on X-rays
-                # "LlavaMedTool",  # For multimodal medical image understanding
-                # "XRayPhraseGroundingTool",  # For locating described features in X-rays
+                "ChestXRaySegmentationTool",  # For segmenting anatomical regions in chest X-rays
+                "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
+                "XRayVQATool",  # For visual question answering on X-rays
+                "LlavaMedTool",  # For multimodal medical image understanding
+                "XRayPhraseGroundingTool",  # For locating described features in X-rays
                 # "ChestXRayGeneratorTool",  # For generating synthetic chest X-rays
                 "WebBrowserTool",  # For web browsing and search capabilities
                 "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
-                # "PythonSandboxTool",  # Add the Python sandbox tool
+                "PythonSandboxTool",  # Add the Python sandbox tool
             ]
 
             rag_config = RAGConfig(
@@ -68,7 +70,7 @@ class MedRAXProvider(LLMProvider):
             agent, tools_dict = initialize_agent(
                 prompt_file="medrax/docs/system_prompts.txt",
                 tools_to_use=selected_tools,
-                model_dir="/model-weights",
+                model_dir="model-weights",
                 temp_dir="temp",  # Change this to the path of the temporary directory
                 device="cpu",
                 model=self.model_name,  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
@@ -158,27 +160,68 @@ class MedRAXProvider(LLMProvider):
                 }]
             })
             
-            # Run the agent
-            response_content = ""
+            # Run the agent with proper message type handling
+            accumulated_content = ""
+            final_response = ""
+            tool_outputs = []
+            
             for chunk in self.agent.workflow.stream(
                 {"messages": messages},
                 {"configurable": {"thread_id": thread_id}},
                 stream_mode="updates"
             ):
-                if isinstance(chunk, dict):
-                    for node_name, node_output in chunk.items():
-                        if "messages" in node_output:
-                            for msg in node_output["messages"]:
-                                if hasattr(msg, 'content') and msg.content:
-                                    response_content += str(msg.content)
+                if not isinstance(chunk, dict):
+                    continue
+                    
+                for node_name, node_output in chunk.items():
+                    if "messages" not in node_output:
+                        continue
+                        
+                    for msg in node_output["messages"]:
+                        if isinstance(msg, AIMessageChunk) and msg.content:
+                            # Accumulate streaming LLM content
+                            accumulated_content += msg.content
+                            
+                        elif isinstance(msg, AIMessage):
+                            # Handle final LLM response (this is the actual final answer)
+                            if msg.content:
+                                # Clean up the content (remove temp paths, etc.)
+                                final_content = re.sub(r"temp/[^\s]*", "", msg.content).strip()
+                                final_response = final_content
+                                # Reset accumulated content since we have the final response
+                                accumulated_content = ""
+                                
+                        elif isinstance(msg, ToolMessage):
+                            # Handle tool outputs (store for debugging but don't use as final answer)
+                            tool_outputs.append({
+                                "tool_call_id": msg.tool_call_id,
+                                "content": msg.content
+                            })
+            
+            # Determine the final response
+            # Priority: final_response > accumulated_content > fallback
+            if final_response:
+                response_content = final_response
+            elif accumulated_content:
+                # If no final AIMessage was received, use accumulated content
+                response_content = accumulated_content.strip()
+            else:
+                # Fallback if no LLM response was received
+                response_content = "No response generated"
             
             duration = time.time() - start_time
             
             return LLMResponse(
-                content=response_content.strip(),
+                content=response_content,
                 usage={"agent_tools": list(self.tools_dict.keys())},
                 duration=duration,
-                raw_response={"thread_id": thread_id, "image_paths": image_paths}
+                raw_response={
+                    "thread_id": thread_id, 
+                    "image_paths": image_paths,
+                    "tool_outputs": tool_outputs,  # Include tool outputs for debugging
+                    "final_response_used": bool(final_response),
+                    "accumulated_content_used": bool(accumulated_content and not final_response)
+                }
             )
             
         except Exception as e:

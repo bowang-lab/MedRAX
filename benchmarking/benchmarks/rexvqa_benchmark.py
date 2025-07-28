@@ -2,10 +2,12 @@
 
 import json
 import os
-from typing import Dict, List, Optional, Any
+from typing import Dict, Optional, Any
 from datasets import load_dataset
 from .base import Benchmark, BenchmarkDataPoint
 from pathlib import Path
+import subprocess
+from huggingface_hub import hf_hub_download, list_repo_files
 
 
 class ReXVQABenchmark(Benchmark):
@@ -47,11 +49,128 @@ class ReXVQABenchmark(Benchmark):
         
         super().__init__(data_dir, **kwargs)
 
+    @staticmethod
+    def download_rexgradient_images(output_dir: str = "benchmarking/data/rexvqa", repo_id: str = "rajpurkarlab/ReXGradient-160K"):
+        """Download and extract ReXGradient-160K images if not already present."""
+        output_dir = Path(output_dir)
+        tar_path = output_dir / "deid_png.tar"
+        images_dir = output_dir / "images"
+
+        # Check if images already exist
+        if images_dir.exists() and any(images_dir.rglob("*.png")):
+            print(f"Images already exist in {images_dir}, skipping download.")
+            return
+        output_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Output directory: {output_dir}")
+        try:
+            print("Listing files in repository...")
+            files = list_repo_files(repo_id, repo_type='dataset')
+            part_files = [f for f in files if f.startswith("deid_png.part")]
+            if not part_files:
+                print("No part files found. The images might be in a different format.")
+                return
+            print(f"Found {len(part_files)} part files.")
+            # Download part files
+            for part_file in part_files:
+                output_path = output_dir / part_file
+                if output_path.exists():
+                    print(f"Skipping {part_file} (already exists)")
+                    continue
+                print(f"Downloading {part_file}...")
+                hf_hub_download(
+                    repo_id=repo_id,
+                    filename=part_file,
+                    local_dir=output_dir,
+                    local_dir_use_symlinks=False,
+                    repo_type='dataset'
+                )
+            # Concatenate part files
+            if not tar_path.exists():
+                print("\nConcatenating part files...")
+                with open(tar_path, 'wb') as tar_file:
+                    for part_file in sorted(part_files):
+                        part_path = output_dir / part_file
+                        if part_path.exists():
+                            print(f"Adding {part_file}...")
+                            with open(part_path, 'rb') as f:
+                                tar_file.write(f.read())
+                        else:
+                            print(f"Warning: {part_file} not found, skipping...")
+            else:
+                print(f"Tar file already exists: {tar_path}")
+            # Extract tar file
+            if tar_path.exists():
+                print("\nExtracting images...")
+                images_dir.mkdir(exist_ok=True)
+                if any(images_dir.rglob("*.png")):
+                    print("Images already extracted.")
+                else:
+                    try:
+                        subprocess.run([
+                            "tar", "-xf", str(tar_path),
+                            "-C", str(images_dir)
+                        ], check=True)
+                        print("Extraction completed!")
+                    except subprocess.CalledProcessError as e:
+                        print(f"Error extracting tar file: {e}")
+                        return
+                    except FileNotFoundError:
+                        print("Error: 'tar' command not found. Please install tar or extract manually.")
+                        return
+                png_files = list(images_dir.rglob("*.png"))
+                print(f"Extracted {len(png_files)} PNG images to {images_dir}")
+
+                # Clean up part and tar files after successful extraction
+                print("Cleaning up part and tar files...")
+                # Remove deid_png.part* files
+                for part_file in output_dir.glob("deid_png.part*"):
+                    try:
+                        part_file.unlink()
+                        print(f"Deleted {part_file}")
+                    except Exception as e:
+                        print(f"Could not delete {part_file}: {e}")
+                # Remove deid_png.tar
+                if tar_path.exists():
+                    try:
+                        tar_path.unlink()
+                        print(f"Deleted {tar_path}")
+                    except Exception as e:
+                        print(f"Could not delete {tar_path}: {e}")
+        except Exception as e:
+            print(f"Error: {e}")
+
+    @staticmethod
+    def download_test_vqa_data_json(output_dir: str = "benchmarking/data/rexvqa", repo_id: str = "rajpurkarlab/ReXVQA"):
+        """Download test_vqa_data.json from the ReXVQA HuggingFace repo if not already present."""
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        json_path = output_dir / "metadata" / "test_vqa_data.json"
+        if json_path.exists():
+            print(f"test_vqa_data.json already exists at {json_path}, skipping download.")
+            return
+        print(f"Downloading test_vqa_data.json to {json_path}...")
+        try:
+            hf_hub_download(
+                repo_id=repo_id,
+                filename="metadata/test_vqa_data.json",
+                local_dir=output_dir,
+                local_dir_use_symlinks=False,
+                repo_type='dataset'
+            )
+            print("Download complete.")
+        except Exception as e:
+            print(f"Error downloading test_vqa_data.json: {e}")
+            print("You may need to accept the license agreement on HuggingFace.")
+
     def _load_data(self) -> None:
         """Load ReXVQA data from local JSON file."""
         try:
+            # Check for images and test_vqa_data.json, download if missing
+            self.download_test_vqa_data_json()
+            self.download_rexgradient_images()
+            
             # Construct path to the JSON file
-            json_file_path = os.path.join("benchmarking", "data", "rexvqa", "test_vqa_data.json")
+            json_file_path = os.path.join("benchmarking", "data", "rexvqa", "metadata", "test_vqa_data.json")
             
             # Check if file exists
             if not os.path.exists(json_file_path):
