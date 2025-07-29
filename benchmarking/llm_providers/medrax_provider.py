@@ -35,11 +35,18 @@ class MedRAXProvider(LLMProvider):
             print("Starting server...")
 
             selected_tools = [
+                # "ImageVisualizerTool",  # For displaying images in the UI
+                # "DicomProcessorTool",  # For processing DICOM medical image files
+                # "ChestXRaySegmentationTool",  # For segmenting anatomical regions in chest X-rays
+                # "LlavaMedTool",  # For multimodal medical image understanding
+                # "ChestXRayGeneratorTool",  # For generating synthetic chest X-rays
+                # "PythonSandboxTool",  # Add the Python sandbox tool
+                
                 "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
-                "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
+                # "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
                 "WebBrowserTool",  # For web browsing and search capabilities
-                "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
                 "XRayVQATool",  # For visual question answering on X-rays
+                "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
                 "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
                 "XRayPhraseGroundingTool",  # For locating described features in X-rays
             ]
@@ -64,9 +71,9 @@ class MedRAXProvider(LLMProvider):
             agent, tools_dict = initialize_agent(
                 prompt_file="medrax/docs/system_prompts.txt",
                 tools_to_use=selected_tools,
-                model_dir="model-weights",
+                model_dir="/model-weights",
                 temp_dir="temp",  # Change this to the path of the temporary directory
-                device="cpu",
+                device="cuda",
                 model=self.model_name,  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
                 temperature=0.3,
                 top_p=0.95,
