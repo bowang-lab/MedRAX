@@ -24,6 +24,7 @@ class BenchmarkResult:
     duration: float
     usage: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
+    raw_response: Optional[Dict[str, Any]] = None
     metadata: Optional[Dict[str, Any]] = None
 
 
@@ -225,6 +226,7 @@ class BenchmarkRunner:
                 is_correct=is_correct,
                 duration=duration,
                 usage=response.usage,
+                raw_response=response.raw_response,
                 metadata={
                     "data_point_metadata": data_point.metadata,
                     "case_id": data_point.case_id,
@@ -243,6 +245,7 @@ class BenchmarkRunner:
                 is_correct=False,
                 duration=duration,
                 error=str(e),
+                raw_response=None,
                 metadata={
                     "data_point_metadata": data_point.metadata,
                     "case_id": data_point.case_id,
@@ -317,6 +320,7 @@ class BenchmarkRunner:
             "duration": result.duration,
             "usage": result.usage,
             "error": result.error,
+            "raw_response": result.raw_response,
             "metadata": result.metadata,
             "timestamp": datetime.now().isoformat(),
             "run_id": self.run_id,

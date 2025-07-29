@@ -35,19 +35,28 @@ class MedRAXProvider(LLMProvider):
             print("Starting server...")
 
             selected_tools = [
-                "ImageVisualizerTool",  # For displaying images in the UI
-                "DicomProcessorTool",  # For processing DICOM medical image files
-                "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
-                # "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
+                # To be tested
+                # "DicomProcessorTool",  # For processing DICOM medical image files
+                # "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
                 "ChestXRaySegmentationTool",  # For segmenting anatomical regions in chest X-rays
-                "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
-                "XRayVQATool",  # For visual question answering on X-rays
-                "LlavaMedTool",  # For multimodal medical image understanding
-                "XRayPhraseGroundingTool",  # For locating described features in X-rays
+                # "WebBrowserTool",  # For web browsing and search capabilities
+                
+                # These tools are working
+                # "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
+                # "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
+                # "XRayVQATool",  # For visual question answering on X-rays
+                        
+
+                # Couldn't test these tools
+                # "ImageVisualizerTool",  # For displaying images in the UI
+                # "PythonSandboxTool",  # Add the Python sandbox tool
+                # "LlavaMedTool",  # For multimodal medical image understanding
                 # "ChestXRayGeneratorTool",  # For generating synthetic chest X-rays
-                "WebBrowserTool",  # For web browsing and search capabilities
-                "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
-                "PythonSandboxTool",  # Add the Python sandbox tool
+                # "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
+
+
+                # Something fishy is going on here
+                # "XRayPhraseGroundingTool",  # For locating described features in X-rays
             ]
 
             rag_config = RAGConfig(
@@ -79,7 +88,6 @@ class MedRAXProvider(LLMProvider):
                 model_kwargs=model_kwargs,
                 rag_config=rag_config,
                 system_prompt=self.prompt_name,
-                debug=True,
             )
             
             self.agent = agent
@@ -163,7 +171,9 @@ class MedRAXProvider(LLMProvider):
             # Run the agent with proper message type handling
             accumulated_content = ""
             final_response = ""
-            tool_outputs = []
+            chat_history = []
+            chunk_history = []
+
             
             for chunk in self.agent.workflow.stream(
                 {"messages": messages},
@@ -174,6 +184,30 @@ class MedRAXProvider(LLMProvider):
                     continue
                     
                 for node_name, node_output in chunk.items():
+                    # Log every chunk for debugging
+                    print(f"Chunk from node '{node_name}': {type(node_output)}")
+                    
+                    # Store serializable version of chunk for debugging
+                    serializable_chunk = {
+                        "node_name": node_name,
+                        "node_type": type(node_output).__name__,
+                        "has_messages": "messages" in node_output if isinstance(node_output, dict) else False
+                    }
+                    
+                    # Log messages in this chunk
+                    if "messages" in node_output and isinstance(node_output, dict):
+                        chunk_messages = []
+                        for msg in node_output["messages"]:
+                            msg_info = {
+                                "type": type(msg).__name__,
+                                "content": str(msg.content) if hasattr(msg, 'content') else str(msg)
+                            }
+                            chunk_messages.append(msg_info)
+                            print(f"Message in chunk: {msg_info}")
+                        serializable_chunk["messages"] = chunk_messages
+                    
+                    chunk_history.append(serializable_chunk)
+
                     if "messages" not in node_output:
                         continue
                         
@@ -181,20 +215,26 @@ class MedRAXProvider(LLMProvider):
                         if isinstance(msg, AIMessageChunk) and msg.content:
                             # Accumulate streaming LLM content
                             accumulated_content += msg.content
+                            chat_history.append({
+                                "role": "AI message chunk",
+                                "content": msg.content
+                            })
                             
                         elif isinstance(msg, AIMessage):
-                            # Handle final LLM response (this is the actual final answer)
+                            # Handle final LLM response
                             if msg.content:
                                 # Clean up the content (remove temp paths, etc.)
-                                final_content = re.sub(r"temp/[^\s]*", "", msg.content).strip()
-                                final_response = final_content
+                                final_response = re.sub(r"temp/[^\s]*", "", msg.content).strip()
                                 # Reset accumulated content since we have the final response
                                 accumulated_content = ""
-                                
+                                chat_history.append({
+                                    "role": "AI message",
+                                    "content": msg.content
+                                })
                         elif isinstance(msg, ToolMessage):
                             # Handle tool outputs (store for debugging but don't use as final answer)
-                            tool_outputs.append({
-                                "tool_call_id": msg.tool_call_id,
+                            chat_history.append({
+                                "role": "tool message",
                                 "content": msg.content
                             })
             
@@ -218,9 +258,8 @@ class MedRAXProvider(LLMProvider):
                 raw_response={
                     "thread_id": thread_id, 
                     "image_paths": image_paths,
-                    "tool_outputs": tool_outputs,  # Include tool outputs for debugging
-                    "final_response_used": bool(final_response),
-                    "accumulated_content_used": bool(accumulated_content and not final_response)
+                    "chat_history": chat_history,
+                    "chunk_history": chunk_history,
                 }
             )
             
