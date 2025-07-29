@@ -114,13 +114,17 @@ class MedRAXProvider(LLMProvider):
                     messages.append(HumanMessage(content=f"image_path: {image_path}"))
                     
                     # Add image content for multimodal LLM
-                    with open(image_path, "rb") as img_file:
-                        img_base64 = self._encode_image(image_path)
-                    
-                    messages.append(HumanMessage(content=[{
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}
-                    }]))
+                    try:
+                        with open(image_path, "rb") as img_file:
+                            img_base64 = self._encode_image(image_path)
+                        
+                        messages.append(HumanMessage(content=[{
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}
+                        }]))
+                    except Exception as e:
+                        print(f"ERROR: Image encoding failed for {image_path}: {e}")
+                        raise
             
             # Add text message
             if request.images:
@@ -146,27 +150,8 @@ class MedRAXProvider(LLMProvider):
                     continue
                     
                 for node_name, node_output in chunk.items():
-                    # Log every chunk for debugging
-                    print(f"Chunk from node '{node_name}': {type(node_output)}")
-                    
-                    # Store serializable version of chunk for debugging
-                    serializable_chunk = {
-                        "node_name": node_name,
-                        "node_type": type(node_output).__name__,
-                    }
-                    
-                    # Log messages in this chunk
-                    if "messages" in node_output and isinstance(node_output, dict):
-                        chunk_messages = []
-                        for msg in node_output["messages"]:
-                            msg_info = {
-                                "type": type(msg).__name__,
-                                "content": str(msg.content) if hasattr(msg, 'content') else str(msg)
-                            }
-                            chunk_messages.append(msg_info)
-                            print(f"Message in chunk: {msg_info}")
-                        serializable_chunk["messages"] = chunk_messages
-                    
+                    # Log chunk and get serializable version
+                    serializable_chunk = self._log_chunk(node_output, node_name)
                     chunk_history.append(serializable_chunk)
 
                     if "messages" not in node_output:
@@ -194,7 +179,41 @@ class MedRAXProvider(LLMProvider):
             )
             
         except Exception as e:
+            print(f"ERROR: MedRAX agent failed: {e}")
             return LLMResponse(
                 content=f"Error: {str(e)}",
                 duration=time.time() - start_time
             )
+
+    def _log_chunk(self, chunk: dict, node_name: str) -> dict:
+        """Log and process a chunk from the agent workflow.
+        
+        Args:
+            chunk (dict): The chunk data from the agent workflow
+            node_name (str): Name of the node that produced the chunk
+            
+        Returns:
+            dict: Serializable version of the chunk for debugging
+        """
+        # Log every chunk for debugging
+        print(f"Chunk from node '{node_name}': {type(chunk)}")
+        
+        # Store serializable version of chunk for debugging
+        serializable_chunk = {
+            "node_name": node_name,
+            "node_type": type(chunk).__name__,
+        }
+        
+        # Log messages in this chunk
+        if "messages" in chunk and isinstance(chunk, dict):
+            chunk_messages = []
+            for msg in chunk["messages"]:
+                msg_info = {
+                    "type": type(msg).__name__,
+                    "content": str(msg.content) if hasattr(msg, 'content') else str(msg)
+                }
+                chunk_messages.append(msg_info)
+                print(f"Message in chunk: {msg_info}")
+            serializable_chunk["messages"] = chunk_messages
+        
+        return serializable_chunk
