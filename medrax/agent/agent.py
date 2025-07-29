@@ -66,7 +66,7 @@ class Agent:
         tools: List[BaseTool],
         checkpointer: Any = None,
         system_prompt: str = "",
-        log_tools: bool = True,
+        log_tools: bool = False,
         log_dir: Optional[str] = "logs",
     ):
         """
@@ -160,7 +160,9 @@ class Agent:
                 )
             )
 
-        self._save_tool_calls(results)
+        if self.log_tools:
+            self._save_tool_calls(results)
+
         print("Returning to model processing!")
 
         return {"messages": results}
@@ -172,9 +174,6 @@ class Agent:
         Args:
             tool_calls (List[ToolMessage]): List of tool calls to save.
         """
-        if not self.log_tools:
-            return
-
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = self.log_path / f"tool_calls_{timestamp}.json"
 
