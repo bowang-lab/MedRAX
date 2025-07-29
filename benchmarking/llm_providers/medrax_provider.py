@@ -1,9 +1,7 @@
 """MedRAX LLM provider implementation."""
 
 import time
-import shutil
 import re
-from pathlib import Path
 
 from .base import LLMProvider, LLMRequest, LLMResponse
 from langchain_core.messages import AIMessage, HumanMessage
@@ -64,9 +62,9 @@ class MedRAXProvider(LLMProvider):
             agent, tools_dict = initialize_agent(
                 prompt_file="medrax/docs/system_prompts.txt",
                 tools_to_use=selected_tools,
-                model_dir="model-weights",
+                model_dir="/model-weights",
                 temp_dir="temp",  # Change this to the path of the temporary directory
-                device="cpu",
+                device="cuda:0",
                 model=self.model_name,  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
                 temperature=0.3,
                 top_p=0.95,
@@ -159,8 +157,12 @@ class MedRAXProvider(LLMProvider):
                         
                     for msg in node_output["messages"]:
                         if isinstance(msg, AIMessage) and msg.content:
+                            # Handle case where content is a list
+                            content = msg.content
+                            if isinstance(content, list):
+                                content = " ".join(content)
                             # Clean up the content (remove temp paths, etc.)
-                            final_response = re.sub(r"temp/[^\s]*", "", msg.content).strip()
+                            final_response = re.sub(r"temp/[^\s]*", "", content).strip()
             
             # Determine the final response
             if final_response:
