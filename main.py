@@ -145,7 +145,7 @@ if __name__ == "__main__":
         # "DicomProcessorTool",  # For processing DICOM medical image files
         "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
         "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
-        # "ChestXRaySegmentationTool",  # For segmenting anatomical regions in chest X-rays
+        "ChestXRaySegmentationTool",  # For segmenting anatomical regions in chest X-rays
         "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
         "XRayVQATool",  # For visual question answering on X-rays
         # "LlavaMedTool",  # For multimodal medical image understanding
@@ -182,7 +182,7 @@ if __name__ == "__main__":
         model_dir="/model-weights",
         temp_dir="temp",  # Change this to the path of the temporary directory
         device="cuda:0",
-        model="gemini-2.5-pro",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
+        model="gpt-4.1-2025-04-14",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
         temperature=0.7,
         top_p=0.95,
         model_kwargs=model_kwargs,
