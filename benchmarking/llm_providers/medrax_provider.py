@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 from .base import LLMProvider, LLMRequest, LLMResponse
-from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from medrax.rag.rag import RAGConfig
 from main import initialize_agent
@@ -37,17 +37,19 @@ class MedRAXProvider(LLMProvider):
             selected_tools = [
                 # "ImageVisualizerTool",  # For displaying images in the UI
                 # "DicomProcessorTool",  # For processing DICOM medical image files
-                "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
-                "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
                 # "ChestXRaySegmentationTool",  # For segmenting anatomical regions in chest X-rays
-                "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
-                "XRayVQATool",  # For visual question answering on X-rays
                 # "LlavaMedTool",  # For multimodal medical image understanding
-                "XRayPhraseGroundingTool",  # For locating described features in X-rays
                 # "ChestXRayGeneratorTool",  # For generating synthetic chest X-rays
-                "WebBrowserTool",  # For web browsing and search capabilities
-                "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
                 # "PythonSandboxTool",  # Add the Python sandbox tool
+                
+                # "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
+                # "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
+                # "WebBrowserTool",  # For web browsing and search capabilities
+                # "XRayVQATool",  # For visual question answering on X-rays
+                "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
+               
+                # "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
+                # "XRayPhraseGroundingTool",  # For locating described features in X-rays
             ]
 
             rag_config = RAGConfig(
@@ -70,9 +72,9 @@ class MedRAXProvider(LLMProvider):
             agent, tools_dict = initialize_agent(
                 prompt_file="medrax/docs/system_prompts.txt",
                 tools_to_use=selected_tools,
-                model_dir="/model-weights",
+                model_dir="model-weights",
                 temp_dir="temp",  # Change this to the path of the temporary directory
-                device="cuda:0",
+                device="cpu",
                 model=self.model_name,  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
                 temperature=0.3,
                 top_p=0.95,
@@ -133,38 +135,31 @@ class MedRAXProvider(LLMProvider):
                         print(f"File successfully copied: {dest_path}")
                     
                     # Add image path message for tools
-                    messages.append({
-                        "role": "user",
-                        "content": f"image_path: {dest_path}"
-                    })
+                    messages.append(HumanMessage(content=f"image_path: {dest_path}"))
                     
                     # Add image content for multimodal LLM
                     with open(image_path, "rb") as img_file:
                         img_base64 = self._encode_image(image_path)
                     
-                    messages.append({
-                        "role": "user",
-                        "content": [{
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}
-                        }]
-                    })
+                    messages.append(HumanMessage(content=[{
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}
+                    }]))
             
             # Add text message
-            messages.append({
-                "role": "user",
-                "content": [{
+            if request.images:
+                # If there are images, add text as part of multimodal content
+                messages.append(HumanMessage(content=[{
                     "type": "text",
                     "text": request.text
-                }]
-            })
+                }]))
+            else:
+                # If no images, add text as simple string
+                messages.append(HumanMessage(content=request.text))
             
             # Run the agent with proper message type handling
-            accumulated_content = ""
             final_response = ""
-            chat_history = []
             chunk_history = []
-
             
             for chunk in self.agent.workflow.stream(
                 {"messages": messages},
@@ -182,7 +177,6 @@ class MedRAXProvider(LLMProvider):
                     serializable_chunk = {
                         "node_name": node_name,
                         "node_type": type(node_output).__name__,
-                        "has_messages": "messages" in node_output if isinstance(node_output, dict) else False
                     }
                     
                     # Log messages in this chunk
@@ -203,39 +197,13 @@ class MedRAXProvider(LLMProvider):
                         continue
                         
                     for msg in node_output["messages"]:
-                        if isinstance(msg, AIMessageChunk) and msg.content:
-                            # Accumulate streaming LLM content
-                            accumulated_content += msg.content
-                            chat_history.append({
-                                "role": "AI message chunk",
-                                "content": msg.content
-                            })
-                            
-                        elif isinstance(msg, AIMessage):
-                            # Handle final LLM response
-                            if msg.content:
-                                # Clean up the content (remove temp paths, etc.)
-                                final_response = re.sub(r"temp/[^\s]*", "", msg.content).strip()
-                                # Reset accumulated content since we have the final response
-                                accumulated_content = ""
-                                chat_history.append({
-                                    "role": "AI message",
-                                    "content": msg.content
-                                })
-                        elif isinstance(msg, ToolMessage):
-                            # Handle tool outputs (store for debugging but don't use as final answer)
-                            chat_history.append({
-                                "role": "tool message",
-                                "content": msg.content
-                            })
+                        if isinstance(msg, AIMessage) and msg.content:
+                            # Clean up the content (remove temp paths, etc.)
+                            final_response = re.sub(r"temp/[^\s]*", "", msg.content).strip()
             
             # Determine the final response
-            # Priority: final_response > accumulated_content > fallback
             if final_response:
                 response_content = final_response
-            elif accumulated_content:
-                # If no final AIMessage was received, use accumulated content
-                response_content = accumulated_content.strip()
             else:
                 # Fallback if no LLM response was received
                 response_content = "No response generated"
@@ -249,7 +217,6 @@ class MedRAXProvider(LLMProvider):
                 raw_response={
                     "thread_id": thread_id, 
                     "image_paths": image_paths,
-                    "chat_history": chat_history,
                     "chunk_history": chunk_history,
                 }
             )
