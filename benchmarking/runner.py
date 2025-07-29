@@ -262,9 +262,15 @@ class BenchmarkRunner:
         Returns:
             str: The extracted answer
         """
-        # First, look for the '<|A|>' format
-        final_answer_pattern = r'\s*<\|([A-F])\|>'
-        match = re.search(final_answer_pattern, response_text)
+        # Look for the '\boxed{A}' format
+        boxed_pattern = r'\\boxed\{([A-Fa-f])\}'
+        match = re.search(boxed_pattern, response_text)
+        if match:
+            return match.group(1).upper()
+        
+        # Fallback: look for the '<|A|>' format (legacy code, will remove later on)
+        legacy_pattern = r'\s*<\|([A-F])\|>'
+        match = re.search(legacy_pattern, response_text)
         if match:
             return match.group(1).upper()
         
