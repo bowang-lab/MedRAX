@@ -25,7 +25,7 @@ class LLMResponse:
     content: str
     usage: Optional[Dict[str, Any]] = None
     duration: Optional[float] = None
-    raw_response: Optional[Any] = None
+    chunk_history: Optional[Any] = None
     
 
 class LLMProvider(ABC):
