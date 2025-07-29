@@ -42,7 +42,6 @@ def initialize_agent(
     rag_config: Optional[RAGConfig] = None,
     model_kwargs: Dict[str, Any] = {},
     system_prompt: str = "MEDICAL_ASSISTANT",
-    debug: bool = False,
 ):
     """Initialize the MedRAX agent with specified tools and configuration.
 
@@ -124,7 +123,6 @@ def initialize_agent(
         log_dir="logs",
         system_prompt=prompt,
         checkpointer=checkpointer,
-        debug=debug,
     )
     print("Agent initialized")
 
@@ -187,7 +185,6 @@ if __name__ == "__main__":
         top_p=0.95,
         model_kwargs=model_kwargs,
         rag_config=rag_config,
-        debug=True,
         system_prompt="MEDICAL_ASSISTANT",
     )
 
