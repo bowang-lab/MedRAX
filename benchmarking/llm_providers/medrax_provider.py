@@ -35,21 +35,13 @@ class MedRAXProvider(LLMProvider):
             print("Starting server...")
 
             selected_tools = [
-                # "ImageVisualizerTool",  # For displaying images in the UI
-                # "DicomProcessorTool",  # For processing DICOM medical image files
-                # "ChestXRaySegmentationTool",  # For segmenting anatomical regions in chest X-rays
-                # "LlavaMedTool",  # For multimodal medical image understanding
-                # "ChestXRayGeneratorTool",  # For generating synthetic chest X-rays
-                # "PythonSandboxTool",  # Add the Python sandbox tool
-                
-                # "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
-                # "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
-                # "WebBrowserTool",  # For web browsing and search capabilities
-                # "XRayVQATool",  # For visual question answering on X-rays
+                "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
+                "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
+                "WebBrowserTool",  # For web browsing and search capabilities
                 "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
-               
-                # "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
-                # "XRayPhraseGroundingTool",  # For locating described features in X-rays
+                "XRayVQATool",  # For visual question answering on X-rays
+                "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
+                "XRayPhraseGroundingTool",  # For locating described features in X-rays
             ]
 
             rag_config = RAGConfig(
@@ -106,8 +98,7 @@ class MedRAXProvider(LLMProvider):
         if self.agent is None:
             return LLMResponse(
                 content="Error: MedRAX agent not initialized",
-                duration=time.time() - start_time,
-                raw_response=None
+                duration=time.time() - start_time
             )
         
         try:
@@ -115,27 +106,12 @@ class MedRAXProvider(LLMProvider):
             messages = []
             thread_id = str(int(time.time() * 1000))  # Unique thread ID
             
-            # Copy images to session temp directory and provide paths
-            image_paths = []
             if request.images:
                 valid_images = self._validate_image_paths(request.images)
                 print(f"Processing {len(valid_images)} images")
                 for i, image_path in enumerate(valid_images):
-                    print(f"Original image path: {image_path}")
-                    # Copy image to session temp directory
-                    dest_path = Path("temp") / f"image_{i}_{Path(image_path).name}"
-                    print(f"Destination path: {dest_path}")
-                    shutil.copy2(image_path, dest_path)
-                    image_paths.append(str(dest_path))
-                    
-                    # Verify file exists after copy
-                    if not dest_path.exists():
-                        print(f"ERROR: File not found after copy: {dest_path}")
-                    else:
-                        print(f"File successfully copied: {dest_path}")
-                    
                     # Add image path message for tools
-                    messages.append(HumanMessage(content=f"image_path: {dest_path}"))
+                    messages.append(HumanMessage(content=f"image_path: {image_path}"))
                     
                     # Add image content for multimodal LLM
                     with open(image_path, "rb") as img_file:
@@ -214,16 +190,11 @@ class MedRAXProvider(LLMProvider):
                 content=response_content,
                 usage={"agent_tools": list(self.tools_dict.keys())},
                 duration=duration,
-                raw_response={
-                    "thread_id": thread_id, 
-                    "image_paths": image_paths,
-                    "chunk_history": chunk_history,
-                }
+                chunk_history=chunk_history
             )
             
         except Exception as e:
             return LLMResponse(
                 content=f"Error: {str(e)}",
-                duration=time.time() - start_time,
-                raw_response=None
+                duration=time.time() - start_time
             )
