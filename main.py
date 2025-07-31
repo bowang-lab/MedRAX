@@ -153,6 +153,7 @@ if __name__ == "__main__":
         "WebBrowserTool",  # For web browsing and search capabilities
         "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
         # "PythonSandboxTool",  # Add the Python sandbox tool
+        "DuckDuckGoSearchTool",  # For privacy-focused web search using DuckDuckGo
     ]
 
     # Configure the Retrieval Augmented Generation (RAG) system

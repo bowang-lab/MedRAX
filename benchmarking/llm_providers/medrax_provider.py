@@ -37,8 +37,9 @@ class MedRAXProvider(LLMProvider):
                 "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
                 "WebBrowserTool",  # For web browsing and search capabilities
                 "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
-                "XRayVQATool",  # For visual question answering on X-rays
                 "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
+                "DuckDuckGoSearchTool",  # For privacy-focused web search using DuckDuckGo
+                "XRayVQATool",  # For visual question answering on X-rays
                 "XRayPhraseGroundingTool",  # For locating described features in X-rays
             ]
 
