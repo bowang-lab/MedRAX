@@ -65,6 +65,9 @@ def initialize_agent(
     prompts = load_prompts_from_file(prompt_file)
     prompt = prompts["MEDICAL_ASSISTANT"]
 
+    # Define the URL of the MedGemma FastAPI service.
+    MEDGEMMA_API_URL = os.getenv("MEDGEMMA_API_URL", "http://127.0.0.1:8002")
+
     all_tools = {
         "TorchXRayVisionClassifierTool": lambda: TorchXRayVisionClassifierTool(device=device),
         "ArcPlusClassifierTool": lambda: ArcPlusClassifierTool(cache_dir=model_dir, device=device),
@@ -87,6 +90,7 @@ def initialize_agent(
         "MedSAM2Tool": lambda: MedSAM2Tool(
             device=device, cache_dir=model_dir, temp_dir=temp_dir
         ),
+        "MedGemmaVQATool": lambda: MedGemmaAPIClientTool(api_url=MEDGEMMA_API_URL)
     }
 
     try:
@@ -149,10 +153,11 @@ if __name__ == "__main__":
         # "LlavaMedTool",  # For multimodal medical image understanding
         # "XRayPhraseGroundingTool",  # For locating described features in X-rays
         # "ChestXRayGeneratorTool",  # For generating synthetic chest X-rays
-        "MedSAM2Tool",  # For advanced medical image segmentation using MedSAM2
-        "WebBrowserTool",  # For web browsing and search capabilities
-        "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
+        # "MedSAM2Tool",  # For advanced medical image segmentation using MedSAM2
+        # "WebBrowserTool",  # For web browsing and search capabilities
+        # "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
         # "PythonSandboxTool",  # Add the Python sandbox tool
+        "MedGemmaVQATool"  # For visual question answering on medical images
     ]
 
     # Configure the Retrieval Augmented Generation (RAG) system
