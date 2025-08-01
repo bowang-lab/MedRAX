@@ -24,6 +24,7 @@ class BenchmarkResult:
     duration: float
     usage: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
+    chunk_history: Optional[Dict[str, Any]] = None
     metadata: Optional[Dict[str, Any]] = None
 
 
@@ -138,9 +139,11 @@ class BenchmarkRunner:
                 # Add to results
                 self.results.append(result)
                 
+                # Save individual result immediately
+                self._save_individual_result(result)
+                
                 # Log progress
                 if processed % 10 == 0:
-                    self._save_intermediate_results()
                     accuracy = (correct / processed) * 100
                     avg_duration = total_duration / processed
                     
@@ -163,6 +166,9 @@ class BenchmarkRunner:
                     error=str(e)
                 )
                 self.results.append(error_result)
+                
+                # Save individual error result immediately
+                self._save_individual_result(error_result)
                 continue
         
         # Save final results
@@ -220,6 +226,7 @@ class BenchmarkRunner:
                 is_correct=is_correct,
                 duration=duration,
                 usage=response.usage,
+                chunk_history=response.chunk_history,
                 metadata={
                     "data_point_metadata": data_point.metadata,
                     "case_id": data_point.case_id,
@@ -238,6 +245,7 @@ class BenchmarkRunner:
                 is_correct=False,
                 duration=duration,
                 error=str(e),
+                chunk_history=None,
                 metadata={
                     "data_point_metadata": data_point.metadata,
                     "case_id": data_point.case_id,
@@ -254,9 +262,9 @@ class BenchmarkRunner:
         Returns:
             str: The extracted answer
         """
-        # First, look for the '<|A|>' format
-        final_answer_pattern = r'\s*<\|([A-F])\|>'
-        match = re.search(final_answer_pattern, response_text)
+        # Look for the '\boxed{A}' format
+        boxed_pattern = r'\\boxed\{([A-Fa-f])\}'
+        match = re.search(boxed_pattern, response_text)
         if match:
             return match.group(1).upper()
         
@@ -286,11 +294,55 @@ class BenchmarkRunner:
         
         return model_letter == correct_letter
 
-    def _save_intermediate_results(self) -> None:
-        """Save intermediate results to disk."""
-        results_file = self.output_dir / f"{self.run_id}_intermediate.json"
+    def _save_individual_result(self, result: BenchmarkResult) -> None:
+        """Save a single result to its own JSON file.
         
-        # Convert results to serializable format
+        Args:
+            result (BenchmarkResult): The result to save
+        """
+        # Sanitize data_point_id for filename (remove invalid characters)
+        safe_id = re.sub(r'[^\w\-_.]', '_', result.data_point_id)
+        
+        # Create filename with benchmark name and data point ID
+        filename = f"{self.config.benchmark_name}_{safe_id}.json"
+        result_file = self.output_dir / "individual_results" / filename
+        
+        # Create individual_results directory if it doesn't exist
+        result_file.parent.mkdir(exist_ok=True)
+        
+        # Convert result to serializable format
+        result_data = {
+            "timestamp": datetime.now().isoformat(),
+            "run_id": self.run_id,
+            "data_point_id": result.data_point_id,
+            "question": result.question,
+            "model_answer": result.model_answer,
+            "correct_answer": result.correct_answer,
+            "is_correct": result.is_correct,
+            "duration": result.duration,
+            "usage": result.usage,
+            "error": result.error,
+            "chunk_history": result.chunk_history,
+            "metadata": result.metadata
+        }
+        
+        # Save to file
+        with open(result_file, 'w') as f:
+            json.dump(result_data, f, indent=2)
+
+    def _save_final_results(self, benchmark: Benchmark) -> Dict[str, Any]:
+        """Save final results and return summary.
+        
+        Args:
+            benchmark (Benchmark): The benchmark that was run
+            
+        Returns:
+            Dict[str, Any]: Summary of results
+        """
+        # Save detailed results
+        results_file = self.output_dir / f"{self.run_id}_results.json"
+        
+        # Convert results to serializable format for final file
         results_data = []
         for result in self.results:
             results_data.append({
@@ -307,19 +359,6 @@ class BenchmarkRunner:
         
         with open(results_file, 'w') as f:
             json.dump(results_data, f, indent=2)
-
-    def _save_final_results(self, benchmark: Benchmark) -> Dict[str, Any]:
-        """Save final results and return summary.
-        
-        Args:
-            benchmark (Benchmark): The benchmark that was run
-            
-        Returns:
-            Dict[str, Any]: Summary of results
-        """
-        # Save detailed results
-        results_file = self.output_dir / f"{self.run_id}_results.json"
-        self._save_intermediate_results()
         
         # Calculate summary statistics
         total_questions = len(self.results)

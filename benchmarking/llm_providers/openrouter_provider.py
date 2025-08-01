@@ -78,12 +78,10 @@ class OpenRouterProvider(LLMProvider):
             return LLMResponse(
                 content=content,
                 usage=usage,
-                duration=duration,
-                raw_response=response
+                duration=duration
             )
         except Exception as e:
             return LLMResponse(
                 content=f"Error: {str(e)}",
-                duration=time.time() - start_time,
-                raw_response=None
+                duration=time.time() - start_time
             ) 

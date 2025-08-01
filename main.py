@@ -41,7 +41,7 @@ def initialize_agent(
     top_p: float = 0.95,
     rag_config: Optional[RAGConfig] = None,
     model_kwargs: Dict[str, Any] = {},
-    debug: bool = False,
+    system_prompt: str = "MEDICAL_ASSISTANT",
 ):
     """Initialize the MedRAX agent with specified tools and configuration.
 
@@ -56,6 +56,7 @@ def initialize_agent(
         top_p (float, optional): Top P for the model. Defaults to 0.95.
         rag_config (RAGConfig, optional): Configuration for the RAG tool. Defaults to None.
         model_kwargs (dict, optional): Additional keyword arguments for model.
+        system_prompt (str, optional): System prompt to use. Defaults to "MEDICAL_ASSISTANT".
         debug (bool, optional): Whether to enable debug mode. Defaults to False.
 
     Returns:
@@ -63,7 +64,7 @@ def initialize_agent(
     """
     # Load system prompts from file
     prompts = load_prompts_from_file(prompt_file)
-    prompt = prompts["MEDICAL_ASSISTANT"]
+    prompt = prompts[system_prompt]
 
     all_tools = {
         "TorchXRayVisionClassifierTool": lambda: TorchXRayVisionClassifierTool(device=device),
@@ -122,7 +123,6 @@ def initialize_agent(
         log_dir="logs",
         system_prompt=prompt,
         checkpointer=checkpointer,
-        debug=debug,
     )
     print("Agent initialized")
 
@@ -141,18 +141,19 @@ if __name__ == "__main__":
     selected_tools = [
         "ImageVisualizerTool",  # For displaying images in the UI
         # "DicomProcessorTool",  # For processing DICOM medical image files
-        # "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
-        # "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
-        # "ChestXRaySegmentationTool",  # For segmenting anatomical regions in chest X-rays
-        # "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
-        # "XRayVQATool",  # For visual question answering on X-rays
+        "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
+        "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
+        "ChestXRaySegmentationTool",  # For segmenting anatomical regions in chest X-rays
+        "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
+        "XRayVQATool",  # For visual question answering on X-rays
         # "LlavaMedTool",  # For multimodal medical image understanding
-        # "XRayPhraseGroundingTool",  # For locating described features in X-rays
+        "XRayPhraseGroundingTool",  # For locating described features in X-rays
         # "ChestXRayGeneratorTool",  # For generating synthetic chest X-rays
-        "MedSAM2Tool",  # For advanced medical image segmentation using MedSAM2
+        # "MedSAM2Tool",  # For advanced medical image segmentation using MedSAM2
         "WebBrowserTool",  # For web browsing and search capabilities
         "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
         # "PythonSandboxTool",  # Add the Python sandbox tool
+        "DuckDuckGoSearchTool",  # For privacy-focused web search using DuckDuckGo
     ]
 
     # Configure the Retrieval Augmented Generation (RAG) system
@@ -165,7 +166,7 @@ if __name__ == "__main__":
         pinecone_index_name="medrax2",  # Name for the Pinecone index
         chunk_size=1500,
         chunk_overlap=300,
-        retriever_k=7,
+        retriever_k=3,
         local_docs_dir="rag_docs",  # Change this to the path of the documents for RAG
         huggingface_datasets=["VictorLJZ/medrax2"],  # List of HuggingFace datasets to load
         dataset_split="train",  # Which split of the datasets to use
@@ -177,15 +178,15 @@ if __name__ == "__main__":
     agent, tools_dict = initialize_agent(
         prompt_file="medrax/docs/system_prompts.txt",
         tools_to_use=selected_tools,
-        model_dir="model-weights",
+        model_dir="/model-weights",
         temp_dir="temp",  # Change this to the path of the temporary directory
-        device="cuda",
-        model="grok-4",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
+        device="cuda:0",
+        model="gpt-4.1-2025-04-14",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
         temperature=0.7,
         top_p=0.95,
         model_kwargs=model_kwargs,
         rag_config=rag_config,
-        debug=True,
+        system_prompt="MEDICAL_ASSISTANT",
     )
 
     # Create and launch the web interface

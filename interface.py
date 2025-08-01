@@ -192,7 +192,11 @@ class ChatInterface:
                                 tool_args = pending_call["args"]
 
                                 try:
-                                    tool_output_json = json.loads(msg.content)
+                                    # Handle case where tool returns tuple (output, metadata)
+                                    content = msg.content
+                                    content_tuple = ast.literal_eval(content)
+                                    content = json.dumps(content_tuple[0])
+                                    tool_output_json = json.loads(content)
                                     tool_output_str = json.dumps(tool_output_json, indent=2)
                                 except (json.JSONDecodeError, TypeError):
                                     tool_output_str = str(msg.content)
@@ -217,10 +221,11 @@ class ChatInterface:
 
                                 if tool_name == "image_visualizer":
                                     try:
-                                        result = json.loads(msg.content)
-                                        # Handle case where tool returns array [output, metadata]
-                                        if isinstance(result, list) and len(result) > 0:
-                                            result = result[0]  # Take the first element (output)
+                                        # Handle case where tool returns tuple (output, metadata)
+                                        content = msg.content
+                                        content_tuple = ast.literal_eval(content)
+                                        result = content_tuple[0]
+                                        
                                         if isinstance(result, dict) and "image_path" in result:
                                             self.display_file_path = result["image_path"]
                                             chat_history.append(
