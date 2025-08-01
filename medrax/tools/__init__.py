@@ -5,7 +5,7 @@ from .report_generation import *
 from .segmentation import *
 from .vqa import *
 from .grounding import *
-from .generation import *
+from .xray_generation import *
 from .dicom import *
 from .utils import *
 from .rag import *
