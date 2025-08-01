@@ -135,7 +135,7 @@ def main():
                            help="Output directory for results (default: benchmark_results)")
     run_parser.add_argument("--max-questions", type=int, 
                            help="Maximum number of questions to process (default: all)")
-    run_parser.add_argument("--temperature", type=float, default=0.7, 
+    run_parser.add_argument("--temperature", type=float, default=1, 
                            help="Model temperature for response generation (default: 0.7)")
     run_parser.add_argument("--top-p", type=float, default=0.95, 
                            help="Top-p nucleus sampling parameter (default: 0.95)")
