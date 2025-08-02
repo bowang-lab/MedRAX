@@ -15,12 +15,6 @@ import transformers
 from transformers import BitsAndBytesConfig, pipeline
 import uvicorn
 
-#TODO: delete this
-print("ENVIRONMENT CHECK")
-print(f"Python Executable: {sys.executable}")
-print(f"PyTorch version: {torch.__version__}")
-print(f"Transformers version: {transformers.__version__}")
-
 # Configuration
 UPLOAD_DIR = "./medgemma_images"
 
