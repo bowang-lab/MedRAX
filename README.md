@@ -245,12 +245,12 @@ MedGemmaAPIClientTool(
     api_url=MEDGEMMA_API_URL)
 )
 ```
-- **Advanced Medical VQA**: Uses Google's MedGemma 4B instruction-tuned model for comprehensive medical image analysis
-- **Multi-modal Capabilities**: Specialized for chest X-rays, dermatology, ophthalmology, and pathology images
-- **Expert-level Analysis**: Provides radiologist-level medical reasoning and diagnosis assistance
-- **High Performance**: Supports up to 128K context length and 896x896 image resolution
-- **Memory Efficient**: 4-bit quantization available (~4GB VRAM) with full precision option (~8GB VRAM)
-- **Automatic Setup**: Model weights download automatically when service starts
+- Uses Google's MedGemma 4B instruction-tuned model for comprehensive medical image analysis
+- Specialized for chest X-rays, dermatology, ophthalmology, and pathology images
+- Provides radiologist-level medical reasoning and diagnosis assistance
+- Supports up to 128K context length and 896x896 image resolution
+- 4-bit quantization available (~4GB VRAM) with full precision option (~8GB VRAM)
+- Model weights download automatically when the service starts
 
 ### MedSAM2 Tool
 ```python
