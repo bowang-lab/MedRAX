@@ -73,7 +73,7 @@ def initialize_agent(
         "ArcPlusClassifierTool": lambda: ArcPlusClassifierTool(cache_dir=model_dir, device=device),
         "ChestXRaySegmentationTool": lambda: ChestXRaySegmentationTool(device=device),
         "LlavaMedTool": lambda: LlavaMedTool(cache_dir=model_dir, device=device, load_in_8bit=True),
-        "XRayVQATool": lambda: XRayVQATool(cache_dir=model_dir, device=device),
+        "CheXagentXRayVQATool": lambda: CheXagentXRayVQATool(cache_dir=model_dir, device=device),
         "ChestXRayReportGeneratorTool": lambda: ChestXRayReportGeneratorTool(
             cache_dir=model_dir, device=device
         ),
@@ -90,7 +90,7 @@ def initialize_agent(
         "MedSAM2Tool": lambda: MedSAM2Tool(
             device=device, cache_dir=model_dir, temp_dir=temp_dir
         ),
-        "MedGemmaVQATool": lambda: MedGemmaAPIClientTool(api_url=MEDGEMMA_API_URL)
+        "MedGemmaVQATool": lambda: MedGemmaAPIClientTool(cache_dir=model_dir, device=device, api_url=MEDGEMMA_API_URL)
     }
 
     try:
@@ -157,8 +157,12 @@ if __name__ == "__main__":
         # "WebBrowserTool",  # For web browsing and search capabilities
         # "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
         # "PythonSandboxTool",  # Add the Python sandbox tool
-        "MedGemmaVQATool"  # For visual question answering on medical images
+        "MedGemmaVQATool" # Google MedGemma VQA tool
     ]
+
+    # Setup the MedGemma environment if the MedGemmaVQATool is selected
+    if "MedGemmaVQATool" in selected_tools:
+        setup_medgemma_env()
 
     # Configure the Retrieval Augmented Generation (RAG) system
     # This allows the agent to access and use medical knowledge documents
@@ -185,7 +189,7 @@ if __name__ == "__main__":
         model_dir="model-weights",
         temp_dir="temp",  # Change this to the path of the temporary directory
         device="cuda",
-        model="grok-4",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
+        model="gpt-4.1-2025-04-14",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
         temperature=0.7,
         top_p=0.95,
         model_kwargs=model_kwargs,
