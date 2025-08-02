@@ -24,7 +24,7 @@ def setup_medgemma_env():
     
     # Define paths for MedGemma components
     medgemma_path = current_dir / "medgemma.py"
-    requirements_path = current_dir / "medgemma_requirements.txt"
+    requirements_path = current_dir / "medgemma_requirements_standard.txt"
     env_dir = current_dir / "medgemma_env"
 
     # Determine executable paths based on operating system
