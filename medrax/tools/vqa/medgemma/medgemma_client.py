@@ -276,15 +276,3 @@ class MedGemmaAPIClientTool(BaseTool):
                 if 'opened_files' in locals():
                     for f in opened_files:
                         f.close()
-
-#TODO: delete this
-if __name__ == "__main__":
-    tool = MedGemmaAPIClientTool(api_url="http://kn045:8002")
-    output, metadata = tool._run(
-        image_paths=["/home/emxie/scratch/MedRAX2/demo/chest/pneumonia1.jpg"],
-        prompt="Classify the xray",
-        system_prompt="You are a radiologist.",
-        max_new_tokens=300
-    )
-    print(output)
-    print(metadata)
