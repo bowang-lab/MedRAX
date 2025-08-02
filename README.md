@@ -134,7 +134,7 @@ GOOGLE_SEARCH_ENGINE_ID=
 
 # MedGemma VQA Tool (Optional)
 # URL for the MedGemma FastAPI service
-MEDGEMMA_API_URL=http://127.0.0.1:8002
+MEDGEMMA_API_URL=
 ```
 
 ### Getting Started
