@@ -151,7 +151,7 @@ class LlavaMedTool(BaseTool):
             output = {
                 "answer": answer,
             }
-            
+           
             metadata = {
                 "question": question,
                 "image_path": image_path,

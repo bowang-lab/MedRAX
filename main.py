@@ -66,12 +66,15 @@ def initialize_agent(
     prompts = load_prompts_from_file(prompt_file)
     prompt = prompts[system_prompt]
 
+    # Define the URL of the MedGemma FastAPI service.
+    MEDGEMMA_API_URL = os.getenv("MEDGEMMA_API_URL", "http://127.0.0.1:8002")
+
     all_tools = {
         "TorchXRayVisionClassifierTool": lambda: TorchXRayVisionClassifierTool(device=device),
         "ArcPlusClassifierTool": lambda: ArcPlusClassifierTool(cache_dir=model_dir, device=device),
         "ChestXRaySegmentationTool": lambda: ChestXRaySegmentationTool(device=device),
         "LlavaMedTool": lambda: LlavaMedTool(cache_dir=model_dir, device=device, load_in_8bit=True),
-        "XRayVQATool": lambda: XRayVQATool(cache_dir=model_dir, device=device),
+        "CheXagentXRayVQATool": lambda: CheXagentXRayVQATool(cache_dir=model_dir, device=device),
         "ChestXRayReportGeneratorTool": lambda: ChestXRayReportGeneratorTool(
             cache_dir=model_dir, device=device
         ),
@@ -88,6 +91,7 @@ def initialize_agent(
         "MedSAM2Tool": lambda: MedSAM2Tool(
             device=device, cache_dir=model_dir, temp_dir=temp_dir
         ),
+        "MedGemmaVQATool": lambda: MedGemmaAPIClientTool(cache_dir=model_dir, device=device, api_url=MEDGEMMA_API_URL)
     }
 
     try:
@@ -150,11 +154,16 @@ if __name__ == "__main__":
         "XRayPhraseGroundingTool",  # For locating described features in X-rays
         # "ChestXRayGeneratorTool",  # For generating synthetic chest X-rays
         # "MedSAM2Tool",  # For advanced medical image segmentation using MedSAM2
-        "WebBrowserTool",  # For web browsing and search capabilities
-        "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
+        # "WebBrowserTool",  # For web browsing and search capabilities
+        # "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
         # "PythonSandboxTool",  # Add the Python sandbox tool
+        "MedGemmaVQATool" # Google MedGemma VQA tool
         "DuckDuckGoSearchTool",  # For privacy-focused web search using DuckDuckGo
     ]
+
+    # Setup the MedGemma environment if the MedGemmaVQATool is selected
+    if "MedGemmaVQATool" in selected_tools:
+        setup_medgemma_env()
 
     # Configure the Retrieval Augmented Generation (RAG) system
     # This allows the agent to access and use medical knowledge documents

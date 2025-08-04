@@ -41,6 +41,7 @@ class MedRAXProvider(LLMProvider):
                 "DuckDuckGoSearchTool",  # For privacy-focused web search using DuckDuckGo
                 "XRayVQATool",  # For visual question answering on X-rays
                 "XRayPhraseGroundingTool",  # For locating described features in X-rays
+                "MedGemmaVQATool"
             ]
 
             rag_config = RAGConfig(
