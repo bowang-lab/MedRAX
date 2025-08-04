@@ -33,15 +33,15 @@ class MedRAXProvider(LLMProvider):
             print("Starting server...")
 
             selected_tools = [
-                "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
-                "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
-                "WebBrowserTool",  # For web browsing and search capabilities
-                "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
-                "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
-                "DuckDuckGoSearchTool",  # For privacy-focused web search using DuckDuckGo
-                "XRayVQATool",  # For visual question answering on X-rays
-                "XRayPhraseGroundingTool",  # For locating described features in X-rays
+                # "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
+                # "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
+                # "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
+                # "XRayVQATool",  # For visual question answering on X-rays
                 "MedGemmaVQATool"
+                # "XRayPhraseGroundingTool",  # For locating described features in X-rays
+                # "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
+                # "WebBrowserTool",  # For web browsing and search capabilities
+                # "DuckDuckGoSearchTool",  # For privacy-focused web search using DuckDuckGo
             ]
 
             rag_config = RAGConfig(
@@ -64,11 +64,11 @@ class MedRAXProvider(LLMProvider):
             agent, tools_dict = initialize_agent(
                 prompt_file="medrax/docs/system_prompts.txt",
                 tools_to_use=selected_tools,
-                model_dir="/model-weights",
+                model_dir="/scratch/ssd004/scratch/victorli/model-weights",
                 temp_dir="temp",  # Change this to the path of the temporary directory
                 device="cuda:0",
                 model=self.model_name,  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
-                temperature=0.3,
+                temperature=1.0,
                 top_p=0.95,
                 model_kwargs=model_kwargs,
                 rag_config=rag_config,

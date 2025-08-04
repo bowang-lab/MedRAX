@@ -34,20 +34,20 @@ class ReXVQABenchmark(Benchmark):
             data_dir (str): Directory to store/cache downloaded data
             **kwargs: Additional configuration parameters
                 split (str): Dataset split to use (default: 'test')
-                cache_dir (str): Directory for caching HuggingFace datasets
                 trust_remote_code (bool): Whether to trust remote code (default: False)
                 max_questions (int): Maximum number of questions to load (default: None, load all)
                 images_dir (str): Directory containing extracted PNG images (default: None)
         """
         self.split = kwargs.get("split", "test")
-        self.cache_dir = kwargs.get("cache_dir", None)
         self.trust_remote_code = kwargs.get("trust_remote_code", False)
         self.max_questions = kwargs.get("max_questions", None)
-        self.images_dir = "benchmarking/data/rexvqa/images/deid_png"
         self.image_dataset = None
         self.image_mapping = {}  # Maps study_id to image data
         
         super().__init__(data_dir, **kwargs)
+        
+        # Set images_dir after parent initialization
+        self.images_dir = f"{self.data_dir}/images/deid_png"
 
     @staticmethod
     def download_rexgradient_images(output_dir: str = "benchmarking/data/rexvqa", repo_id: str = "rajpurkarlab/ReXGradient-160K"):
@@ -166,8 +166,8 @@ class ReXVQABenchmark(Benchmark):
         """Load ReXVQA data from local JSON file."""
         try:
             # Check for images and test_vqa_data.json, download if missing
-            self.download_test_vqa_data_json()
-            self.download_rexgradient_images()
+            self.download_test_vqa_data_json(self.data_dir)
+            self.download_rexgradient_images(self.data_dir)
             
             # Construct path to the JSON file
             json_file_path = os.path.join("benchmarking", "data", "rexvqa", "metadata", "test_vqa_data.json")
@@ -197,7 +197,7 @@ class ReXVQABenchmark(Benchmark):
                 self.image_dataset = load_dataset(
                     "rajpurkarlab/ReXGradient-160K",
                     split="test",
-                    cache_dir=self.cache_dir,
+                    cache_dir=self.data_dir,
                     trust_remote_code=self.trust_remote_code
                 )
                 print(f"Loaded {len(self.image_dataset)} image metadata entries from ReXGradient-160K")

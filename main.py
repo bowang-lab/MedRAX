@@ -33,7 +33,7 @@ _ = load_dotenv()
 def initialize_agent(
     prompt_file: str,
     tools_to_use: Optional[List[str]] = None,
-    model_dir: str = "/model-weights",
+    model_dir: str = "/scratch/ssd004/scratch/victorli/model-weights",
     temp_dir: str = "temp",
     device: str = "cpu",
     model: str = "gpt-4.1-2025-04-14",
@@ -88,6 +88,7 @@ def initialize_agent(
         "DicomProcessorTool": lambda: DicomProcessorTool(temp_dir=temp_dir),
         "MedicalRAGTool": lambda: RAGTool(config=rag_config),
         "WebBrowserTool": lambda: WebBrowserTool(),
+        "DuckDuckGoSearchTool": lambda: DuckDuckGoSearchTool(),
         "MedSAM2Tool": lambda: MedSAM2Tool(
             device=device, cache_dir=model_dir, temp_dir=temp_dir
         ),
