@@ -22,6 +22,7 @@ MedRAX is built on a robust technical foundation:
 
 ### Integrated Tools
 - **Visual QA**: Utilizes CheXagent and LLaVA-Med for complex visual understanding and medical reasoning
+- **MedGemma VQA**: Advanced medical visual question answering using Google's MedGemma 4B model for comprehensive medical image analysis across multiple modalities
 - **Segmentation**: Employs MedSAM2 (advanced medical image segmentation) and PSPNet model trained on ChestX-Det for precise anatomical structure identification
 - **Grounding**: Uses Maira-2 for localizing specific findings in medical images
 - **Report Generation**: Implements SwinV2 Transformer trained on CheXpert Plus for detailed medical reporting
@@ -131,6 +132,10 @@ PINECONE_API_KEY=
 # Requires Google Custom Search API credentials.
 GOOGLE_SEARCH_API_KEY=
 GOOGLE_SEARCH_ENGINE_ID=
+
+# MedGemma VQA Tool (Optional)
+# URL for the MedGemma FastAPI service
+MEDGEMMA_API_URL=
 ```
 
 ### Getting Started
@@ -226,6 +231,21 @@ XRayVQATool(
 )
 ```
 - CheXagent weights download automatically
+
+### MedGemma VQA Tool
+```python
+MedGemmaAPIClientTool(
+    device=device,
+    cache_dir=model_dir, 
+    api_url=MEDGEMMA_API_URL)
+)
+```
+- Uses Google's MedGemma 4B instruction-tuned model for comprehensive medical image analysis
+- Specialized for chest X-rays, dermatology, ophthalmology, and pathology images
+- Provides radiologist-level medical reasoning and diagnosis assistance
+- Supports up to 128K context length and 896x896 image resolution
+- 4-bit quantization available (~4GB VRAM) with full precision option (~8GB VRAM)
+- Model weights download automatically when the service starts
 
 ### MedSAM2 Tool
 ```python
