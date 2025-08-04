@@ -117,7 +117,7 @@ class LlavaMedTool(BaseTool):
         question: str,
         image_path: Optional[str] = None,
         run_manager: Optional[CallbackManagerForToolRun] = None,
-    ) -> Tuple[str, Dict]:
+    ) -> Tuple[Dict[str, Any], Dict]:
         """Answer a medical question, optionally based on an input image.
 
         Args:
@@ -126,7 +126,7 @@ class LlavaMedTool(BaseTool):
             run_manager (Optional[CallbackManagerForToolRun]): The callback manager for the tool run.
 
         Returns:
-            Tuple[str, Dict]: A tuple containing the model's answer and any additional metadata.
+            Tuple[Dict[str, Any], Dict]: A tuple containing the output dictionary and metadata dictionary.
 
         Raises:
             Exception: If there's an error processing the input or generating the answer.
@@ -146,7 +146,12 @@ class LlavaMedTool(BaseTool):
                     use_cache=True,
                 )
 
-            output = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
+            answer = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
+            
+            output = {
+                "answer": answer,
+            }
+           
             metadata = {
                 "question": question,
                 "image_path": image_path,
@@ -154,18 +159,20 @@ class LlavaMedTool(BaseTool):
             }
             return output, metadata
         except Exception as e:
-            return f"Error generating answer: {str(e)}", {
+            output = {"error": f"Error generating answer: {str(e)}"}
+            metadata = {
                 "question": question,
                 "image_path": image_path,
                 "analysis_status": "failed",
             }
+            return output, metadata
 
     async def _arun(
         self,
         question: str,
         image_path: Optional[str] = None,
         run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
-    ) -> Tuple[str, Dict]:
+    ) -> Tuple[Dict[str, Any], Dict]:
         """Asynchronously answer a medical question, optionally based on an input image.
 
         This method currently calls the synchronous version, as the model inference
@@ -178,7 +185,7 @@ class LlavaMedTool(BaseTool):
             run_manager (Optional[AsyncCallbackManagerForToolRun]): The async callback manager for the tool run.
 
         Returns:
-            Tuple[str, Dict]: A tuple containing the model's answer and any additional metadata.
+            Tuple[Dict[str, Any], Dict]: A tuple containing the output dictionary and metadata dictionary.
 
         Raises:
             Exception: If there's an error processing the input or generating the answer.

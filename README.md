@@ -29,6 +29,7 @@ MedRAX is built on a robust technical foundation:
 - **Disease Classification**: Leverages DenseNet-121 from TorchXRayVision for detecting 18 pathology classes
 - **X-ray Generation**: Utilizes RoentGen for synthetic CXR generation
 - **Web Browser**: Provides web search capabilities and URL content retrieval using Google Custom Search API
+- **DuckDuckGo Search**: Offers privacy-focused web search capabilities using DuckDuckGo search engine for medical research, fact-checking, and accessing current medical information without API keys
 - **Python Sandbox**: Executes Python code in a secure, stateful sandbox environment using `langchain-sandbox` and Pyodide. Supports custom data analysis, calculations, and dynamic package installations. Pre-configured with medical analysis packages including pandas, numpy, pydicom, SimpleITK, scikit-image, Pillow, scikit-learn, matplotlib, seaborn, and openpyxl. **Requires Deno runtime.**
 - **Utilities**: Includes DICOM processing, visualization tools, and custom plotting capabilities
 <br><br>
@@ -164,6 +165,7 @@ selected_tools = [
     "ChestXRaySegmentationTool",
     "PythonSandboxTool",              # Python code execution
     "WebBrowserTool",                 # Web search and URL access
+    "DuckDuckGoSearchTool",           # Privacy-focused web search
     # Add or remove tools as needed
 ]
 
@@ -179,17 +181,10 @@ agent, tools_dict = initialize_agent(
 
 The following tools will automatically download their model weights when initialized:
 
-### Classification Tools
+### Classification Tool
 ```python
 # TorchXRayVision-based classifier (original)
 TorchXRayVisionClassifierTool(device=device)
-
-# ArcPlus SwinTransformer-based classifier (new)
-ArcPlusClassifierTool(
-    model_path="/path/to/Ark6_swinLarge768_ep50.pth.tar",  # Optional
-    num_classes=18,  # Default
-    device=device
-)
 ```
 
 ### Segmentation Tool
@@ -283,6 +278,7 @@ No additional model weights required:
 ImageVisualizerTool()
 DicomProcessorTool(temp_dir=temp_dir)
 WebBrowserTool()  # Requires Google Search API credentials
+DuckDuckGoSearchTool()  # No API key required, privacy-focused search
 ```
 <br>
 
@@ -300,6 +296,25 @@ ChestXRayGeneratorTool(
   1. Contact authors: https://github.com/StanfordMIMI/RoentGen
   2. Place weights in `{model_dir}/roentgen`
   3. Optional tool, can be excluded if not needed
+
+### ArcPlus SwinTransformer-based Classifier
+```python
+ArcPlusClassifierTool(
+    model_path="/path/to/Ark6_swinLarge768_ep50.pth.tar",  # Optional
+    num_classes=18,  # Default
+    device=device
+)
+```
+
+The ArcPlus classifier requires manual setup as the pre-trained model is not publicly available for automatic download:
+
+1. **Request Access**: Visit [https://github.com/jlianglab/Ark](https://github.com/jlianglab/Ark) and request the pretrained model through their Google Forms
+2. **Download Model**: Once approved, download the `Ark6_swinLarge768_ep50.pth.tar` file
+3. **Place in Directory**: Drag the downloaded file into your `model-weights` directory
+4. **Initialize Tool**: The tool will automatically look for the model file in the specified `cache_dir`
+
+The ArcPlus model provides advanced chest X-ray classification across 6 medical datasets (MIMIC, CheXpert, NIH, RSNA, VinDr, Shenzhen) with 52+ pathology categories.
+```
 
 ### Knowledge Base Setup (MedicalRAGTool)
 
@@ -402,6 +417,8 @@ If you are running a local LLM using frameworks like [Ollama](https://ollama.com
 #### Tool-Specific Configuration
 
 **WebBrowserTool**: Requires Google Custom Search API credentials, which can be set in the `.env` file.
+
+**DuckDuckGoSearchTool**: No API key required. Uses DuckDuckGo's privacy-focused search engine for medical research and fact-checking.
 
 **PythonSandboxTool**: Requires Deno runtime installation:
 ```bash

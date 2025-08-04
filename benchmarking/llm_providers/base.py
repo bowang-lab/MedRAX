@@ -25,7 +25,7 @@ class LLMResponse:
     content: str
     usage: Optional[Dict[str, Any]] = None
     duration: Optional[float] = None
-    raw_response: Optional[Any] = None
+    chunk_history: Optional[Any] = None
     
 
 class LLMProvider(ABC):
@@ -35,22 +35,24 @@ class LLMProvider(ABC):
     text + image input -> text output across different models and APIs.
     """
 
-    def __init__(self, model_name: str, **kwargs):
+    def __init__(self, model_name: str, system_prompt: str, **kwargs):
         """Initialize the LLM provider.
         
         Args:
             model_name (str): Name of the model to use
+            system_prompt (str): System prompt identifier to load from file
             **kwargs: Additional configuration parameters
         """
         self.model_name = model_name
         self.config = kwargs
+        self.prompt_name = system_prompt  # Store the original prompt identifier
         
-        # Always load system prompt from file
+        # Load system prompt content from file
         try:
             prompts = load_prompts_from_file("medrax/docs/system_prompts.txt")
-            self.system_prompt = prompts.get("CHESTAGENTBENCH_PROMPT", None)
+            self.system_prompt = prompts.get(system_prompt, None)
             if self.system_prompt is None:
-                print(f"Warning: System prompt not found in medrax/docs/system_prompts.txt.")
+                print(f"Warning: System prompt '{system_prompt}' not found in medrax/docs/system_prompts.txt.")
         except Exception as e:
             print(f"Error loading system prompt: {e}")
             self.system_prompt = None
@@ -102,8 +104,12 @@ class LLMProvider(ABC):
         Returns:
             str: Base64 encoded image string
         """
-        with open(image_path, "rb") as image_file:
-            return base64.b64encode(image_file.read()).decode('utf-8')
+        try:
+            with open(image_path, "rb") as image_file:
+                return base64.b64encode(image_file.read()).decode('utf-8')
+        except Exception as e:
+            print(f"ERROR: _encode_image failed for {image_path} (type: {type(image_path)}): {e}")
+            raise
 
     def _validate_image_paths(self, image_paths: List[str]) -> List[str]:
         """Validate that image paths exist and are readable.
