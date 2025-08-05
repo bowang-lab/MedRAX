@@ -10,6 +10,7 @@ with different model weights, tools, and parameters.
 """
 
 import warnings
+import os
 from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
 from transformers import logging
@@ -33,11 +34,11 @@ _ = load_dotenv()
 def initialize_agent(
     prompt_file: str,
     tools_to_use: Optional[List[str]] = None,
-    model_dir: str = "/scratch/ssd004/scratch/victorli/model-weights",
+    model_dir: str = "model-weights",
     temp_dir: str = "temp",
     device: str = "cpu",
-    model: str = "gpt-4.1-2025-04-14",
-    temperature: float = 0.7,
+    model: str = "gemini-2.5-pro",
+    temperature: float = 1.0,
     top_p: float = 0.95,
     rag_config: Optional[RAGConfig] = None,
     model_kwargs: Dict[str, Any] = {},
@@ -93,20 +94,24 @@ def initialize_agent(
             device=device, cache_dir=model_dir, temp_dir=temp_dir
         ),
         "MedGemmaVQATool": lambda: MedGemmaAPIClientTool(cache_dir=model_dir, device=device, api_url=MEDGEMMA_API_URL)
-    }
+    }    
 
+    # Initialize only selected tools or all if none specified
+    tools_dict: Dict[str, BaseTool] = {}
+    if tools_to_use is None:
+        tools_to_use = []
+    for tool_name in tools_to_use:
+        if tool_name == "PythonSandboxTool":
+            continue
+        if tool_name in all_tools:
+            tools_dict[tool_name] = all_tools[tool_name]()
+
+    # Try to create the PythonSandboxTool
     try:
         tools_dict["PythonSandboxTool"] = create_python_sandbox()
     except Exception as e:
         print(f"Error creating PythonSandboxTool: {e}")
         print("Skipping PythonSandboxTool")
-
-    # Initialize only selected tools or all if none specified
-    tools_dict: Dict[str, BaseTool] = {}
-    tools_to_use = tools_to_use or all_tools.keys()
-    for tool_name in tools_to_use:
-        if tool_name in all_tools:
-            tools_dict[tool_name] = all_tools[tool_name]()
 
     # Set up checkpointing for conversation state
     checkpointer = MemorySaver()
@@ -146,20 +151,20 @@ if __name__ == "__main__":
     selected_tools = [
         "ImageVisualizerTool",  # For displaying images in the UI
         # "DicomProcessorTool",  # For processing DICOM medical image files
+        # "ChestXRayGeneratorTool",  # For generating synthetic chest X-rays
+        "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
         "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
         "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
-        "ChestXRaySegmentationTool",  # For segmenting anatomical regions in chest X-rays
-        "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
+        "MedGemmaVQATool" # Google MedGemma VQA tool
         "XRayVQATool",  # For visual question answering on X-rays
         # "LlavaMedTool",  # For multimodal medical image understanding
         "XRayPhraseGroundingTool",  # For locating described features in X-rays
-        # "ChestXRayGeneratorTool",  # For generating synthetic chest X-rays
+        "ChestXRaySegmentationTool",  # For segmenting anatomical regions in chest X-rays
         # "MedSAM2Tool",  # For advanced medical image segmentation using MedSAM2
         # "WebBrowserTool",  # For web browsing and search capabilities
+        "DuckDuckGoSearchTool",  # For privacy-focused web search using DuckDuckGo
         # "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
         # "PythonSandboxTool",  # Add the Python sandbox tool
-        "MedGemmaVQATool" # Google MedGemma VQA tool
-        "DuckDuckGoSearchTool",  # For privacy-focused web search using DuckDuckGo
     ]
 
     # Setup the MedGemma environment if the MedGemmaVQATool is selected
@@ -188,11 +193,11 @@ if __name__ == "__main__":
     agent, tools_dict = initialize_agent(
         prompt_file="medrax/docs/system_prompts.txt",
         tools_to_use=selected_tools,
-        model_dir="/model-weights",
+        model_dir="model-weights",
         temp_dir="temp",  # Change this to the path of the temporary directory
-        device="cuda:0",
-        model="gpt-4.1-2025-04-14",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
-        temperature=0.7,
+        device="cpu",
+        model="gemini-2.5-pro",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
+        temperature=1.0,
         top_p=0.95,
         model_kwargs=model_kwargs,
         rag_config=rag_config,
