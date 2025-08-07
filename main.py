@@ -68,7 +68,7 @@ def initialize_agent(
     prompt = prompts[system_prompt]
 
     # Define the URL of the MedGemma FastAPI service.
-    MEDGEMMA_API_URL = os.getenv("MEDGEMMA_API_URL", "http://127.0.0.1:8002")
+    MEDGEMMA_API_URL = os.getenv("MEDGEMMA_API_URL", "http://172.17.8.141:8002")
 
     all_tools = {
         "TorchXRayVisionClassifierTool": lambda: TorchXRayVisionClassifierTool(device=device),
@@ -98,20 +98,20 @@ def initialize_agent(
 
     # Initialize only selected tools or all if none specified
     tools_dict: Dict[str, BaseTool] = {}
+
     if tools_to_use is None:
         tools_to_use = []
+        
     for tool_name in tools_to_use:
         if tool_name == "PythonSandboxTool":
-            continue
+            try:
+                tools_dict["PythonSandboxTool"] = create_python_sandbox()
+            except Exception as e:
+                print(f"Error creating PythonSandboxTool: {e}")
+                print("Skipping PythonSandboxTool")
         if tool_name in all_tools:
             tools_dict[tool_name] = all_tools[tool_name]()
-
-    # Try to create the PythonSandboxTool
-    try:
-        tools_dict["PythonSandboxTool"] = create_python_sandbox()
-    except Exception as e:
-        print(f"Error creating PythonSandboxTool: {e}")
-        print("Skipping PythonSandboxTool")
+    
 
     # Set up checkpointing for conversation state
     checkpointer = MemorySaver()
