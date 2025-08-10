@@ -73,6 +73,8 @@ def run_benchmark_command(args) -> None:
     
     # Create benchmark
     benchmark_kwargs = {}
+    if args.random_seed is not None:
+        benchmark_kwargs["random_seed"] = args.random_seed
     
     benchmark = create_benchmark(benchmark_name=args.benchmark, data_dir=args.data_dir, **benchmark_kwargs)
     
@@ -135,12 +137,14 @@ def main():
                            help="Output directory for results (default: benchmark_results)")
     run_parser.add_argument("--max-questions", type=int, 
                            help="Maximum number of questions to process (default: all)")
-    run_parser.add_argument("--temperature", type=float, default=0.7, 
+    run_parser.add_argument("--temperature", type=float, default=1, 
                            help="Model temperature for response generation (default: 0.7)")
     run_parser.add_argument("--top-p", type=float, default=0.95, 
                            help="Top-p nucleus sampling parameter (default: 0.95)")
     run_parser.add_argument("--max-tokens", type=int, default=5000, 
                            help="Maximum tokens per model response (default: 5000)")
+    run_parser.add_argument("--random-seed", type=int, default=42, 
+                           help="Random seed for shuffling benchmark data (enables reproducible runs, default: None)")
     
     run_parser.set_defaults(func=run_benchmark_command)
     

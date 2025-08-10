@@ -345,7 +345,8 @@ class ArcPlusClassifierTool(BaseTool):
                     predictions = predictions[: len(self.disease_list)]
 
             # Create output dictionary mapping disease names to probabilities
-            output = dict(zip(self.disease_list, predictions.astype(float)))
+            # Convert numpy floats to native Python floats for proper serialization
+            output = dict(zip(self.disease_list, [float(pred) for pred in predictions]))
 
             metadata = {
                 "image_path": image_path,

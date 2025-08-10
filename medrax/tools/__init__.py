@@ -3,14 +3,11 @@
 from .classification import *
 from .report_generation import *
 from .segmentation import *
-from .xray_vqa import *
-from .llava_med import *
+from .vqa import *
 from .grounding import *
-from .generation import *
+from .xray_generation import *
 from .dicom import *
 from .utils import *
 from .rag import *
-from .web_browser import *
+from .browsing import *
 from .python_tool import *
-from .medsam2 import *
-

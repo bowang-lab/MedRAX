@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Any, Iterator, Tuple
 from dataclasses import dataclass
 from pathlib import Path
+import random
 
 
 @dataclass
@@ -31,16 +32,30 @@ class Benchmark(ABC):
         Args:
             data_dir (str): Directory containing benchmark data
             **kwargs: Additional configuration parameters
+                random_seed (int): Random seed for shuffling data (default: None, no shuffling)
         """
         self.data_dir = Path(data_dir)
         self.config = kwargs
         self.data_points = []
         self._load_data()
+        self._shuffle_data()
 
     @abstractmethod
     def _load_data(self) -> None:
         """Load benchmark data from the data directory."""
         pass
+
+    def _shuffle_data(self) -> None:
+        """Shuffle the data points if a random seed is provided.
+        
+        This method is called automatically after data loading to ensure
+        reproducible benchmark runs when a random seed is specified.
+        """
+        random_seed = self.config.get("random_seed", None)
+        if random_seed is not None:
+            random.seed(random_seed)
+            random.shuffle(self.data_points)
+            print(f"Shuffled {len(self.data_points)} data points with seed {random_seed}")
 
     def get_data_point(self, index: int) -> BenchmarkDataPoint:
         """Get a specific data point by index.

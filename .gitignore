@@ -180,3 +180,5 @@ model-weights/
 .DS_Store
 
 benchmarking/data/
+model_cache/
+medgemma/

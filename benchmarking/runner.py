@@ -268,12 +268,6 @@ class BenchmarkRunner:
         if match:
             return match.group(1).upper()
         
-        # Fallback: look for the '<|A|>' format (legacy code, will remove later on)
-        legacy_pattern = r'\s*<\|([A-F])\|>'
-        match = re.search(legacy_pattern, response_text)
-        if match:
-            return match.group(1).upper()
-        
         # If no pattern matches, return the full response
         return response_text.strip()
 

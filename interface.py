@@ -193,7 +193,11 @@ class ChatInterface:
 
                                 # First, display the tool usage card
                                 try:
-                                    tool_output_json = json.loads(msg.content)
+                                    # Handle case where tool returns tuple (output, metadata)
+                                    content = msg.content
+                                    content_tuple = ast.literal_eval(content)
+                                    content = json.dumps(content_tuple[0])
+                                    tool_output_json = json.loads(content)
                                     tool_output_str = json.dumps(tool_output_json, indent=2)
                                 except (json.JSONDecodeError, TypeError):
                                     tool_output_str = str(msg.content)
@@ -216,19 +220,19 @@ class ChatInterface:
                                 # Special handling for image_visualizer
                                 if tool_name == "image_visualizer":
                                     try:
-                                        # Tool returns (output, metadata) tuple
-                                        # msg.content should be the serialized version of this
-                                        result = eval(msg.content)  # Safe here as it's from our tool
-                                        if isinstance(result, tuple) and len(result) >= 1:
-                                            output_dict = result[0]
-                                            if isinstance(output_dict, dict) and "image_path" in output_dict:
-                                                self.display_file_path = output_dict["image_path"]
-                                                chat_history.append(
-                                                    ChatMessage(
-                                                        role="assistant",
-                                                        content={"path": self.display_file_path},
-                                                    )
+                                        # Handle case where tool returns tuple (output, metadata)
+                                        content = msg.content
+                                        content_tuple = ast.literal_eval(content)
+                                        result = content_tuple[0]
+                                        
+                                        if isinstance(result, dict) and "image_path" in result:
+                                            self.display_file_path = result["image_path"]
+                                            chat_history.append(
+                                                ChatMessage(
+                                                    role="assistant",
+                                                    content={"path": self.display_file_path},
                                                 )
+                                            )
                                     except Exception:
                                         pass
                                 

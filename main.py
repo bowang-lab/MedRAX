@@ -10,6 +10,7 @@ with different model weights, tools, and parameters.
 """
 
 import warnings
+import os
 from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
 from transformers import logging
@@ -33,11 +34,11 @@ _ = load_dotenv()
 def initialize_agent(
     prompt_file: str,
     tools_to_use: Optional[List[str]] = None,
-    model_dir: str = "/model-weights",
+    model_dir: str = "model-weights",
     temp_dir: str = "temp",
     device: str = "cpu",
-    model: str = "gpt-4.1-2025-04-14",
-    temperature: float = 0.7,
+    model: str = "gemini-2.5-pro",
+    temperature: float = 1.0,
     top_p: float = 0.95,
     rag_config: Optional[RAGConfig] = None,
     model_kwargs: Dict[str, Any] = {},
@@ -66,12 +67,15 @@ def initialize_agent(
     prompts = load_prompts_from_file(prompt_file)
     prompt = prompts[system_prompt]
 
+    # Define the URL of the MedGemma FastAPI service.
+    MEDGEMMA_API_URL = os.getenv("MEDGEMMA_API_URL", "http://172.17.8.141:8002")
+
     all_tools = {
         "TorchXRayVisionClassifierTool": lambda: TorchXRayVisionClassifierTool(device=device),
         "ArcPlusClassifierTool": lambda: ArcPlusClassifierTool(cache_dir=model_dir, device=device),
         "ChestXRaySegmentationTool": lambda: ChestXRaySegmentationTool(device=device),
         "LlavaMedTool": lambda: LlavaMedTool(cache_dir=model_dir, device=device, load_in_8bit=True),
-        "XRayVQATool": lambda: XRayVQATool(cache_dir=model_dir, device=device),
+        "CheXagentXRayVQATool": lambda: CheXagentXRayVQATool(cache_dir=model_dir, device=device),
         "ChestXRayReportGeneratorTool": lambda: ChestXRayReportGeneratorTool(
             cache_dir=model_dir, device=device
         ),
@@ -85,23 +89,29 @@ def initialize_agent(
         "DicomProcessorTool": lambda: DicomProcessorTool(temp_dir=temp_dir),
         "MedicalRAGTool": lambda: RAGTool(config=rag_config),
         "WebBrowserTool": lambda: WebBrowserTool(),
+        "DuckDuckGoSearchTool": lambda: DuckDuckGoSearchTool(),
         "MedSAM2Tool": lambda: MedSAM2Tool(
             device=device, cache_dir=model_dir, temp_dir=temp_dir
         ),
-    }
-
-    try:
-        tools_dict["PythonSandboxTool"] = create_python_sandbox()
-    except Exception as e:
-        print(f"Error creating PythonSandboxTool: {e}")
-        print("Skipping PythonSandboxTool")
+        "MedGemmaVQATool": lambda: MedGemmaAPIClientTool(cache_dir=model_dir, device=device, api_url=MEDGEMMA_API_URL)
+    }    
 
     # Initialize only selected tools or all if none specified
     tools_dict: Dict[str, BaseTool] = {}
-    tools_to_use = tools_to_use or all_tools.keys()
+
+    if tools_to_use is None:
+        tools_to_use = []
+        
     for tool_name in tools_to_use:
+        if tool_name == "PythonSandboxTool":
+            try:
+                tools_dict["PythonSandboxTool"] = create_python_sandbox()
+            except Exception as e:
+                print(f"Error creating PythonSandboxTool: {e}")
+                print("Skipping PythonSandboxTool")
         if tool_name in all_tools:
             tools_dict[tool_name] = all_tools[tool_name]()
+    
 
     # Set up checkpointing for conversation state
     checkpointer = MemorySaver()
@@ -139,21 +149,46 @@ if __name__ == "__main__":
     # Example: initialize with only specific tools
     # Here three tools are commented out, you can uncomment them to use them
     selected_tools = [
+        # Image Processing Tools
         "ImageVisualizerTool",  # For displaying images in the UI
         # "DicomProcessorTool",  # For processing DICOM medical image files
+
+        # Segmentation Tools
+        "MedSAM2Tool",  # For advanced medical image segmentation using MedSAM2
+        "ChestXRaySegmentationTool",  # For segmenting anatomical regions in chest X-rays
+
+        # Generation Tools
+        # "ChestXRayGeneratorTool",  # For generating synthetic chest X-rays
+
+        # Classification Tools
         "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
         "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
-        "ChestXRaySegmentationTool",  # For segmenting anatomical regions in chest X-rays
+
+        # Report Generation Tools
         "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
+
+        # Grounding Tools
+        "XRayPhraseGroundingTool",  # For locating described features in X-rays
+
+        # VQA Tools
+        "MedGemmaVQATool",  # Google MedGemma VQA tool
         "XRayVQATool",  # For visual question answering on X-rays
         # "LlavaMedTool",  # For multimodal medical image understanding
-        "XRayPhraseGroundingTool",  # For locating described features in X-rays
-        # "ChestXRayGeneratorTool",  # For generating synthetic chest X-rays
-        "MedSAM2Tool",  # For advanced medical image segmentation using MedSAM2
-        "WebBrowserTool",  # For web browsing and search capabilities
+
+        # RAG Tools
         "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
+
+        # Search Tools
+        "WebBrowserTool",  # For web browsing and search capabilities
+        "DuckDuckGoSearchTool",  # For privacy-focused web search using DuckDuckGo
+
+        # Development Tools
         # "PythonSandboxTool",  # Add the Python sandbox tool
     ]
+
+    # Setup the MedGemma environment if the MedGemmaVQATool is selected
+    if "MedGemmaVQATool" in selected_tools:
+        setup_medgemma_env()
 
     # Configure the Retrieval Augmented Generation (RAG) system
     # This allows the agent to access and use medical knowledge documents
@@ -177,11 +212,11 @@ if __name__ == "__main__":
     agent, tools_dict = initialize_agent(
         prompt_file="medrax/docs/system_prompts.txt",
         tools_to_use=selected_tools,
-        model_dir="/model-weights",
+        model_dir="model-weights",
         temp_dir="temp",  # Change this to the path of the temporary directory
         device="cuda:1",
-        model="gpt-4.1-2025-04-14",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
-        temperature=0.7,
+        model="gpt-4.1-2025-04-14",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro, gpt-5
+        temperature=1.0,
         top_p=0.95,
         model_kwargs=model_kwargs,
         rag_config=rag_config,

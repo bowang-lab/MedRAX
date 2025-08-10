@@ -24,10 +24,10 @@ class XRayVQAToolInput(BaseModel):
     )
 
 
-class XRayVQATool(BaseTool):
+class CheXagentXRayVQATool(BaseTool):
     """Tool that leverages CheXagent for comprehensive chest X-ray analysis."""
 
-    name: str = "chest_xray_expert"
+    name: str = "chexagent_xray_vqa"
     description: str = (
         "A versatile tool for analyzing chest X-rays. "
         "Can perform multiple tasks including: visual question answering, report generation, "
@@ -51,7 +51,7 @@ class XRayVQATool(BaseTool):
         cache_dir: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
-        """Initialize the XRayVQATool.
+        """Initialize the CheXagentXRayVQATool.
 
         Args:
             model_name: Name of the CheXagent model to use

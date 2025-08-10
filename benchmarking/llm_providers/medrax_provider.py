@@ -33,20 +33,36 @@ class MedRAXProvider(LLMProvider):
             print("Starting server...")
 
             selected_tools = [
+                # Image Processing Tools
                 # "ImageVisualizerTool",  # For displaying images in the UI
                 # "DicomProcessorTool",  # For processing DICOM medical image files
                 # "ChestXRaySegmentationTool",  # For segmenting anatomical regions in chest X-rays
-                # "LlavaMedTool",  # For multimodal medical image understanding
                 # "ChestXRayGeneratorTool",  # For generating synthetic chest X-rays
-                # "PythonSandboxTool",  # Add the Python sandbox tool
-                
-                "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
-                "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
-                # "WebBrowserTool",  # For web browsing and search capabilities
-                # "XRayVQATool",  # For visual question answering on X-rays
+
+                # Classification Tools
                 "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
                 "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
-                # "XRayPhraseGroundingTool",  # For locating described features in X-rays
+
+                # Report Generation Tools
+                "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
+
+                # Grounding Tools
+                "XRayPhraseGroundingTool",  # For locating described features in X-rays
+
+                # VQA Tools
+                # "LlavaMedTool",  # For multimodal medical image understanding
+                # "XRayVQATool",  # For visual question answering on X-rays
+                "MedGemmaVQATool",
+
+                # RAG Tools
+                "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
+
+                # Search Tools
+                # "WebBrowserTool",  # For web browsing and search capabilities
+                # "DuckDuckGoSearchTool",  # For privacy-focused web search using DuckDuckGo
+
+                # Development Tools
+                # "PythonSandboxTool",  # Add the Python sandbox tool
             ]
 
             rag_config = RAGConfig(
@@ -69,11 +85,11 @@ class MedRAXProvider(LLMProvider):
             agent, tools_dict = initialize_agent(
                 prompt_file="medrax/docs/system_prompts.txt",
                 tools_to_use=selected_tools,
-                model_dir="/model-weights",
+                model_dir="/scratch/ssd004/scratch/victorli/model-weights",
                 temp_dir="temp",  # Change this to the path of the temporary directory
                 device="cuda:1",
                 model=self.model_name,  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
-                temperature=0.3,
+                temperature=1.0,
                 top_p=0.95,
                 model_kwargs=model_kwargs,
                 rag_config=rag_config,

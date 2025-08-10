@@ -15,7 +15,7 @@ from langchain_core.callbacks import (
 from langchain_core.tools import BaseTool
 
 # Add MedSAM2 to Python path for proper module resolution
-medsam2_path = str(Path(__file__).parent.parent.parent / "MedSAM2")
+medsam2_path = str(Path(__file__).parent.parent.parent.parent / "MedSAM2")
 if medsam2_path not in sys.path:
     sys.path.append(medsam2_path)
 
@@ -93,7 +93,7 @@ class MedSAM2Tool(BaseTool):
             if GlobalHydra.instance().is_initialized():
                 GlobalHydra.instance().clear()
             
-            config_dir = Path(__file__).parent.parent.parent / "MedSAM2" / "sam2" / "configs"
+            config_dir = Path(__file__).parent.parent.parent.parent / "MedSAM2" / "sam2" / "configs"
             initialize_config_dir(config_dir=str(config_dir), version_base="1.2")
             
             hf_hub_download(
