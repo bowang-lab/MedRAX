@@ -39,7 +39,6 @@ def initialize_agent(
     device: str = "cpu",
     model: str = "gemini-2.5-pro",
     temperature: float = 1.0,
-    top_p: float = 0.95,
     rag_config: Optional[RAGConfig] = None,
     model_kwargs: Dict[str, Any] = {},
     system_prompt: str = "MEDICAL_ASSISTANT",
@@ -54,7 +53,6 @@ def initialize_agent(
         device (str, optional): Device to run models on. Defaults to "cuda".
         model (str, optional): Model to use. Defaults to "gpt-4o".
         temperature (float, optional): Temperature for the model. Defaults to 0.7.
-        top_p (float, optional): Top P for the model. Defaults to 0.95.
         rag_config (RAGConfig, optional): Configuration for the RAG tool. Defaults to None.
         model_kwargs (dict, optional): Additional keyword arguments for model.
         system_prompt (str, optional): System prompt to use. Defaults to "MEDICAL_ASSISTANT".
@@ -119,7 +117,7 @@ def initialize_agent(
     # Create the language model using the factory
     try:
         llm = ModelFactory.create_model(
-            model_name=model, temperature=temperature, top_p=top_p, **model_kwargs
+            model_name=model, temperature=temperature, **model_kwargs
         )
     except ValueError as e:
         print(f"Error creating language model: {e}")
@@ -212,12 +210,11 @@ if __name__ == "__main__":
     agent, tools_dict = initialize_agent(
         prompt_file="medrax/docs/system_prompts.txt",
         tools_to_use=selected_tools,
-        model_dir="model-weights",
-        temp_dir="temp",  # Change this to the path of the temporary directory
-        device="cuda:1",
-        model="gpt-4.1-2025-04-14",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro, gpt-5
+        model_dir="/model-weights",
+        temp_dir="temp2",  # Change this to the path of the temporary directory
+        device="cuda:0",
+        model="gpt-5",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro, gpt-5
         temperature=1.0,
-        top_p=0.95,
         model_kwargs=model_kwargs,
         rag_config=rag_config,
         system_prompt="MEDICAL_ASSISTANT",
@@ -225,4 +222,4 @@ if __name__ == "__main__":
 
     # Create and launch the web interface
     demo = create_demo(agent, tools_dict)
-    demo.launch(server_name="0.0.0.0", server_port=8585, share=True)
+    demo.launch(server_name="0.0.0.0", server_port=8686, share=True)
