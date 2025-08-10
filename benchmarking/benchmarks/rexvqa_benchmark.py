@@ -152,39 +152,58 @@ class ReXVQABenchmark(Benchmark):
                     print("Images already extracted.")
                 else:
                     try:
-                        # Stream extract with filtering for test-only images
-                        print("Stream extracting zstd-compressed tar file with filtering...")
-                        
+                        # Stream extract with filtering for test-only images (no seeking)
+                        print("Stream extracting zstd-compressed tar file with filtering (streaming mode)...")
+
                         # Create a decompressor
                         dctx = zstd.ZstdDecompressor()
-                        
+
                         # Stream extract with filtering
                         extracted_count = 0
-                        total_files = 0
-                        
+                        total_png_members = 0
+
                         with open(tar_path, 'rb') as compressed_file:
                             with dctx.stream_reader(compressed_file) as decompressed_stream:
-                                with tarfile.open(fileobj=decompressed_stream, mode='r:*') as tar:
-                                    for member in tar.getmembers():
-                                        total_files += 1
-                                        
-                                        # Check if this is a file (not directory) and if we should extract it
-                                        if member.isfile() and member.name.endswith('.png'):
-                                            should_extract = True
-                                            if test_only:
-                                                # Check if this image is in our test set
-                                                should_extract = member.name in test_image_paths
-                                            
-                                            if should_extract:
-                                                # Extract this specific file
-                                                member.name = os.path.basename(member.name)  # Keep only filename
-                                                tar.extract(member, path=images_dir)
-                                                extracted_count += 1
-                                                
-                                                if extracted_count % 100 == 0:
-                                                    print(f"Extracted {extracted_count} test images...")
-                        
-                        print(f"Extraction completed! Extracted {extracted_count} out of {total_files} total files")
+                                # Use streaming tar mode to avoid seeks
+                                with tarfile.open(fileobj=decompressed_stream, mode='r|') as tar:
+                                    for member in tar:
+                                        # Only consider PNG files
+                                        if not member.isfile() or not member.name.endswith('.png'):
+                                            continue
+                                        total_png_members += 1
+
+                                        # Normalize name to match entries gathered from JSON
+                                        normalized_name = member.name.lstrip('./')
+
+                                        # Decide whether to extract this file
+                                        should_extract = True
+                                        if test_only:
+                                            should_extract = normalized_name in test_image_paths
+
+                                        if not should_extract:
+                                            # Must still advance the stream for this member
+                                            tar.members = []  # no-op in stream mode; ensure we don't hold refs
+                                            continue
+
+                                        # Ensure parent directories exist and write file by streaming
+                                        target_path = Path(images_dir) / normalized_name
+                                        target_path.parent.mkdir(parents=True, exist_ok=True)
+
+                                        extracted_file_obj = tar.extractfile(member)
+                                        if extracted_file_obj is None:
+                                            continue
+                                        with open(target_path, 'wb') as out_f:
+                                            while True:
+                                                chunk = extracted_file_obj.read(1024 * 1024)
+                                                if not chunk:
+                                                    break
+                                                out_f.write(chunk)
+
+                                        extracted_count += 1
+                                        if extracted_count % 100 == 0:
+                                            print(f"Extracted {extracted_count} test images...")
+
+                        print(f"Extraction completed! Extracted {extracted_count} matching PNGs out of {total_png_members} PNG members in the archive")
                         
                         # Clean up compressed tar file after successful extraction
                         print("Cleaning up compressed tar file...")
