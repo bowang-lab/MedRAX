@@ -87,7 +87,8 @@ def run_benchmark_command(args) -> None:
         max_questions=args.max_questions,
         temperature=args.temperature,
         top_p=args.top_p,
-        max_tokens=args.max_tokens
+        max_tokens=args.max_tokens,
+        concurrency=args.concurrency
     )
     
     # Run benchmark
@@ -145,6 +146,8 @@ def main():
                            help="Maximum tokens per model response (default: 5000)")
     run_parser.add_argument("--random-seed", type=int, default=42, 
                            help="Random seed for shuffling benchmark data (enables reproducible runs, default: None)")
+    run_parser.add_argument("--concurrency", type=int, default=1,
+                            help="Number of datapoints to process in parallel (default: 1)")
     
     run_parser.set_defaults(func=run_benchmark_command)
     

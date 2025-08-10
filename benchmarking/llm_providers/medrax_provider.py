@@ -37,11 +37,11 @@ class MedRAXProvider(LLMProvider):
                 "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
                 "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
                 "XRayPhraseGroundingTool",  # For locating described features in X-rays
-                "MedGemmaVQATool",
-                # "XRayVQATool",  # For visual question answering on X-rays
-                # "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
-                # "WebBrowserTool",  # For web browsing and search capabilities
-                # "DuckDuckGoSearchTool",  # For privacy-focused web search using DuckDuckGo
+                "MedGemmaVQATool", # Google MedGemma VQA tool
+                "XRayVQATool",  # For visual question answering on X-rays
+                "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
+                "WebBrowserTool",  # For web browsing and search capabilities
+                "DuckDuckGoSearchTool",  # For privacy-focused web search using DuckDuckGo
             ]
 
             rag_config = RAGConfig(

@@ -9,6 +9,7 @@ from typing import Dict, Optional, Any
 from dataclasses import dataclass
 from tqdm import tqdm
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from .llm_providers import LLMProvider, LLMRequest, LLMResponse
 from .benchmarks import Benchmark, BenchmarkDataPoint
 
@@ -40,6 +41,7 @@ class BenchmarkRunConfig:
     top_p: float = 0.95
     max_tokens: int = 5000
     additional_params: Optional[Dict[str, Any]] = None
+    concurrency: int = 1
 
 
 class BenchmarkRunner:
@@ -122,40 +124,16 @@ class BenchmarkRunner:
         correct = 0
         total_duration = 0.0
         
-        # Process each data point
-        for i in tqdm(range(0, end_index), desc="Processing questions"):
+        # Determine concurrency
+        max_workers = max(1, int(getattr(self.config, "concurrency", 1) or 1))
+        
+        # Prefetch data points to avoid potential thread-safety issues inside benchmark access
+        data_points = []
+        for i in range(0, end_index):
             try:
-                data_point = benchmark.get_data_point(i)
-                
-                # Run the model on this data point
-                result = self._process_data_point(llm_provider, data_point)
-                
-                # Update counters
-                processed += 1
-                if result.is_correct:
-                    correct += 1
-                total_duration += result.duration
-                
-                # Add to results
-                self.results.append(result)
-                
-                # Save individual result immediately
-                self._save_individual_result(result)
-                
-                # Log progress
-                if processed % 10 == 0:
-                    accuracy = (correct / processed) * 100
-                    avg_duration = total_duration / processed
-                    
-                    self.logger.info(
-                        f"Progress: {processed}/{end_index} | "
-                        f"Accuracy: {accuracy:.2f}% | "
-                        f"Avg Duration: {avg_duration:.2f}s"
-                    )
-                
+                data_points.append(benchmark.get_data_point(i))
             except Exception as e:
-                self.logger.error(f"Error processing data point {i}: {e}")
-                # Add error result
+                self.logger.error(f"Error fetching data point {i}: {e}")
                 error_result = BenchmarkResult(
                     data_point_id=f"error_{i}",
                     question="",
@@ -166,10 +144,50 @@ class BenchmarkRunner:
                     error=str(e)
                 )
                 self.results.append(error_result)
-                
-                # Save individual error result immediately
                 self._save_individual_result(error_result)
-                continue
+        
+        # Process data points in parallel using a bounded thread pool
+        with tqdm(total=end_index, desc="Processing questions") as pbar:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_index = {executor.submit(self._process_data_point, llm_provider, dp): idx for idx, dp in enumerate(data_points)}
+                for future in as_completed(future_to_index):
+                    idx = future_to_index[future]
+                    try:
+                        result = future.result()
+                    except Exception as e:
+                        self.logger.error(f"Error processing data point {idx}: {e}")
+                        result = BenchmarkResult(
+                            data_point_id=f"error_{idx}",
+                            question="",
+                            model_answer="",
+                            correct_answer="",
+                            is_correct=False,
+                            duration=0.0,
+                            error=str(e)
+                        )
+                    
+                    # Update counters
+                    processed += 1
+                    if result.is_correct:
+                        correct += 1
+                    total_duration += result.duration
+                    
+                    # Add to results and persist immediately
+                    self.results.append(result)
+                    self._save_individual_result(result)
+                    
+                    # Update progress bar
+                    pbar.update(1)
+                    
+                    # Periodic logging
+                    if processed % 10 == 0:
+                        accuracy = (correct / processed) * 100
+                        avg_duration = total_duration / processed if processed > 0 else 0.0
+                        self.logger.info(
+                            f"Progress: {processed}/{end_index} | "
+                            f"Accuracy: {accuracy:.2f}% | "
+                            f"Avg Duration: {avg_duration:.2f}s"
+                        )
         
         # Save final results
         summary = self._save_final_results(benchmark)
@@ -391,6 +409,7 @@ class BenchmarkRunner:
                 "model_name": self.config.model_name,
                 "benchmark_name": self.config.benchmark_name,
                 "temperature": self.config.temperature,
+                "top_p": self.config.top_p,
                 "max_tokens": self.config.max_tokens,
             },
             "benchmark_info": {

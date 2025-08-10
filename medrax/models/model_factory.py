@@ -123,6 +123,16 @@ class ModelFactory:
         if provider_prefix in ["openrouter"] and model_name.startswith(f"{provider_prefix}-"):
             actual_model_name = model_name[len(provider_prefix) + 1 :]
 
+        # Handle GPT-5 model
+        if model_name.startswith("gpt-5"):
+            return model_class(
+                model=actual_model_name,
+                temperature=temperature,
+                reasoning_effort="high",
+                **provider_kwargs,
+                **kwargs,
+            )
+
         # Create and return the model instance
         return model_class(
             model=actual_model_name,

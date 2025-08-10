@@ -68,7 +68,7 @@ def initialize_agent(
     prompt = prompts[system_prompt]
 
     # Define the URL of the MedGemma FastAPI service.
-    MEDGEMMA_API_URL = os.getenv("MEDGEMMA_API_URL", "http://172.17.8.141:8002")
+    MEDGEMMA_API_URL = os.getenv("MEDGEMMA_API_URL", "http://localhost:8002")
 
     all_tools = {
         "TorchXRayVisionClassifierTool": lambda: TorchXRayVisionClassifierTool(device=device),

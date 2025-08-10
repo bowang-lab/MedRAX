@@ -7,6 +7,8 @@ from datasets import load_dataset
 from .base import Benchmark, BenchmarkDataPoint
 from pathlib import Path
 import subprocess
+import tarfile
+import zstandard as zstd
 from huggingface_hub import hf_hub_download, list_repo_files
 
 
@@ -50,8 +52,14 @@ class ReXVQABenchmark(Benchmark):
         self.images_dir = f"{self.data_dir}/images/deid_png"
 
     @staticmethod
-    def download_rexgradient_images(output_dir: str = "benchmarking/data/rexvqa", repo_id: str = "rajpurkarlab/ReXGradient-160K"):
-        """Download and extract ReXGradient-160K images if not already present."""
+    def download_rexgradient_images(output_dir: str = "benchmarking/data/rexvqa", repo_id: str = "rajpurkarlab/ReXGradient-160K", test_only: bool = True):
+        """Download and extract ReXGradient-160K images if not already present.
+        
+        Args:
+            output_dir: Directory to store downloaded and extracted images
+            repo_id: HuggingFace repository ID for the dataset
+            test_only: If True, only extract images from the test split (default: True)
+        """
         output_dir = Path(output_dir)
         tar_path = output_dir / "deid_png.tar"
         images_dir = output_dir / "images"
@@ -60,6 +68,33 @@ class ReXVQABenchmark(Benchmark):
         if images_dir.exists() and any(images_dir.rglob("*.png")):
             print(f"Images already exist in {images_dir}, skipping download.")
             return
+            
+        # Load test split metadata if test_only is True
+        test_image_paths = set()
+        if test_only:
+            print("Loading test split metadata to identify test images...")
+            try:
+                # Load the test metadata to get image paths
+                test_metadata_path = output_dir / "metadata" / "test_vqa_data.json"
+                if test_metadata_path.exists():
+                    with open(test_metadata_path, 'r', encoding='utf-8') as f:
+                        test_data = json.load(f)
+                    
+                    # Extract all image paths from test data
+                    for item in test_data.values():
+                        if "ImagePath" in item and item["ImagePath"]:
+                            for rel_path in item["ImagePath"]:
+                                # Normalize path to match tar file structure
+                                norm_path = rel_path.lstrip("./")
+                                test_image_paths.add(norm_path)
+                    
+                    print(f"Found {len(test_image_paths)} test images to extract")
+                else:
+                    print("Warning: test_vqa_data.json not found, will extract all images")
+                    test_only = False
+            except Exception as e:
+                print(f"Warning: Could not load test metadata: {e}, will extract all images")
+                test_only = False
         output_dir.mkdir(parents=True, exist_ok=True)
         print(f"Output directory: {output_dir}")
         try:
@@ -96,6 +131,17 @@ class ReXVQABenchmark(Benchmark):
                                 tar_file.write(f.read())
                         else:
                             print(f"Warning: {part_file} not found, skipping...")
+                
+                # Clean up part files after successful concatenation
+                print("Cleaning up part files...")
+                for part_file in part_files:
+                    part_path = output_dir / part_file
+                    if part_path.exists():
+                        try:
+                            part_path.unlink()
+                            print(f"Deleted {part_file}")
+                        except Exception as e:
+                            print(f"Could not delete {part_file}: {e}")
             else:
                 print(f"Tar file already exists: {tar_path}")
             # Extract tar file
@@ -106,36 +152,53 @@ class ReXVQABenchmark(Benchmark):
                     print("Images already extracted.")
                 else:
                     try:
-                        subprocess.run([
-                            "tar", "-xf", str(tar_path),
-                            "-C", str(images_dir)
-                        ], check=True)
-                        print("Extraction completed!")
-                    except subprocess.CalledProcessError as e:
+                        # Stream extract with filtering for test-only images
+                        print("Stream extracting zstd-compressed tar file with filtering...")
+                        
+                        # Create a decompressor
+                        dctx = zstd.ZstdDecompressor()
+                        
+                        # Stream extract with filtering
+                        extracted_count = 0
+                        total_files = 0
+                        
+                        with open(tar_path, 'rb') as compressed_file:
+                            with dctx.stream_reader(compressed_file) as decompressed_stream:
+                                with tarfile.open(fileobj=decompressed_stream, mode='r:*') as tar:
+                                    for member in tar.getmembers():
+                                        total_files += 1
+                                        
+                                        # Check if this is a file (not directory) and if we should extract it
+                                        if member.isfile() and member.name.endswith('.png'):
+                                            should_extract = True
+                                            if test_only:
+                                                # Check if this image is in our test set
+                                                should_extract = member.name in test_image_paths
+                                            
+                                            if should_extract:
+                                                # Extract this specific file
+                                                member.name = os.path.basename(member.name)  # Keep only filename
+                                                tar.extract(member, path=images_dir)
+                                                extracted_count += 1
+                                                
+                                                if extracted_count % 100 == 0:
+                                                    print(f"Extracted {extracted_count} test images...")
+                        
+                        print(f"Extraction completed! Extracted {extracted_count} out of {total_files} total files")
+                        
+                        # Clean up compressed tar file after successful extraction
+                        print("Cleaning up compressed tar file...")
+                        try:
+                            tar_path.unlink()
+                            print(f"Deleted {tar_path}")
+                        except Exception as e:
+                            print(f"Could not delete {tar_path}: {e}")
+                    except Exception as e:
                         print(f"Error extracting tar file: {e}")
-                        return
-                    except FileNotFoundError:
-                        print("Error: 'tar' command not found. Please install tar or extract manually.")
                         return
                 png_files = list(images_dir.rglob("*.png"))
                 print(f"Extracted {len(png_files)} PNG images to {images_dir}")
 
-                # Clean up part and tar files after successful extraction
-                print("Cleaning up part and tar files...")
-                # Remove deid_png.part* files
-                for part_file in output_dir.glob("deid_png.part*"):
-                    try:
-                        part_file.unlink()
-                        print(f"Deleted {part_file}")
-                    except Exception as e:
-                        print(f"Could not delete {part_file}: {e}")
-                # Remove deid_png.tar
-                if tar_path.exists():
-                    try:
-                        tar_path.unlink()
-                        print(f"Deleted {tar_path}")
-                    except Exception as e:
-                        print(f"Could not delete {tar_path}: {e}")
         except Exception as e:
             print(f"Error: {e}")
 
@@ -167,7 +230,7 @@ class ReXVQABenchmark(Benchmark):
         try:
             # Check for images and test_vqa_data.json, download if missing
             self.download_test_vqa_data_json(self.data_dir)
-            self.download_rexgradient_images(self.data_dir)
+            self.download_rexgradient_images(self.data_dir, test_only=True)
             
             # Construct path to the JSON file
             json_file_path = os.path.join("benchmarking", "data", "rexvqa", "metadata", "test_vqa_data.json")
