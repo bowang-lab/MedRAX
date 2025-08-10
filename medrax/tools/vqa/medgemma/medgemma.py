@@ -5,7 +5,7 @@ import sys
 import traceback
 from typing import Any, Dict, List, Optional, Tuple
 import uuid
-
+from dotenv import load_dotenv
 from PIL import Image
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -20,6 +20,10 @@ UPLOAD_DIR = "./medgemma_images"
 
 # Create directories if they don't exist
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# Load environment variables from .env file
+load_dotenv()
+
 
 # Pydantic Models for API
 class VQAInput(BaseModel):
