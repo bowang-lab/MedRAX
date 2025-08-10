@@ -104,8 +104,12 @@ class LLMProvider(ABC):
         Returns:
             str: Base64 encoded image string
         """
-        with open(image_path, "rb") as image_file:
-            return base64.b64encode(image_file.read()).decode('utf-8')
+        try:
+            with open(image_path, "rb") as image_file:
+                return base64.b64encode(image_file.read()).decode('utf-8')
+        except Exception as e:
+            print(f"ERROR: _encode_image failed for {image_path} (type: {type(image_path)}): {e}")
+            raise
 
     def _validate_image_paths(self, image_paths: List[str]) -> List[str]:
         """Validate that image paths exist and are readable.

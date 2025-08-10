@@ -191,16 +191,15 @@ class ChatInterface:
                                 tool_name = pending_call["name"]
                                 tool_args = pending_call["args"]
 
+                                # First, display the tool usage card
                                 try:
                                     tool_output_json = json.loads(msg.content)
                                     tool_output_str = json.dumps(tool_output_json, indent=2)
                                 except (json.JSONDecodeError, TypeError):
                                     tool_output_str = str(msg.content)
-
+                                
                                 tool_args_str = json.dumps(tool_args, indent=2)
-
                                 description = f"**Input:**\n```json\n{tool_args_str}\n```\n\n**Output:**\n```json\n{tool_output_str}\n```"
-
                                 metadata = {
                                     "title": f"⚒️ Tool: {tool_name}",
                                     "description": description,
@@ -213,25 +212,29 @@ class ChatInterface:
                                         metadata=metadata,
                                     )
                                 )
-                                yield chat_history, self.display_file_path, ""
 
+                                # Special handling for image_visualizer
                                 if tool_name == "image_visualizer":
                                     try:
-                                        result = json.loads(msg.content)
-                                        # Handle case where tool returns array [output, metadata]
-                                        if isinstance(result, list) and len(result) > 0:
-                                            result = result[0]  # Take the first element (output)
-                                        if isinstance(result, dict) and "image_path" in result:
-                                            self.display_file_path = result["image_path"]
-                                            chat_history.append(
-                                                ChatMessage(
-                                                    role="assistant",
-                                                    content={"path": self.display_file_path},
+                                        # Tool returns (output, metadata) tuple
+                                        # msg.content should be the serialized version of this
+                                        result = eval(msg.content)  # Safe here as it's from our tool
+                                        if isinstance(result, tuple) and len(result) >= 1:
+                                            output_dict = result[0]
+                                            if isinstance(output_dict, dict) and "image_path" in output_dict:
+                                                self.display_file_path = output_dict["image_path"]
+                                                chat_history.append(
+                                                    ChatMessage(
+                                                        role="assistant",
+                                                        content={"path": self.display_file_path},
+                                                    )
                                                 )
-                                            )
-                                            yield chat_history, self.display_file_path, ""
-                                    except (json.JSONDecodeError, TypeError):
+                                    except Exception:
                                         pass
+                                
+                                # Yield a single update for this tool event
+                                yield chat_history, self.display_file_path, ""
+
 
         except Exception as e:
             chat_history.append(
@@ -268,7 +271,7 @@ def create_demo(agent, tools_dict):
                 with gr.Column(scale=5):
                     chatbot = gr.Chatbot(
                         [],
-                        height=1000,
+                        height=1200,
                         container=True,
                         show_label=True,
                         elem_classes="chat-box",
