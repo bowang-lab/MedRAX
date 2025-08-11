@@ -1,7 +1,7 @@
 import os
 import json
 import numpy as np
-from typing import Dict, List, Union, Tuple
+from typing import Dict, List, Tuple
 
 
 def preprocess_medical_image(
@@ -68,23 +68,6 @@ def preprocess_medical_image(
         image = np.clip(image, target_min, target_max)
     
     return image
-
-
-def normalize_medical_image_for_torchxrayvision(image: np.ndarray) -> np.ndarray:
-    """
-    Normalize medical images specifically for TorchXRayVision models.
-    
-    This function is a convenience wrapper around preprocess_medical_image
-    that normalizes images to the -1024 to 1024 range expected by TorchXRayVision models.
-    This range corresponds to the Hounsfield Unit scale adapted for X-ray images.
-    
-    Args:
-        image (np.ndarray): Input image array (2D or 3D)
-    
-    Returns:
-        np.ndarray: Normalized image in -1024 to 1024 range
-    """
-    return preprocess_medical_image(image, target_range=(-1024.0, 1024.0))
 
 
 def load_prompts_from_file(file_path: str) -> Dict[str, str]:
