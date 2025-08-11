@@ -46,10 +46,10 @@ class ReXVQABenchmark(Benchmark):
         self.image_dataset = None
         self.image_mapping = {}  # Maps study_id to image data
         
-        super().__init__(data_dir, **kwargs)
+        # Set images_dir BEFORE parent initialization to avoid AttributeError
+        self.images_dir = f"{data_dir}/images/deid_png"
         
-        # Set images_dir after parent initialization
-        self.images_dir = f"{self.data_dir}/images/deid_png"
+        super().__init__(data_dir, **kwargs)
 
     @staticmethod
     def download_rexgradient_images(output_dir: str = "benchmarking/data/rexvqa", repo_id: str = "rajpurkarlab/ReXGradient-160K", test_only: bool = True):
