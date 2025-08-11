@@ -91,7 +91,7 @@ def initialize_agent(
         "MedSAM2Tool": lambda: MedSAM2Tool(
             device=device, cache_dir=model_dir, temp_dir=temp_dir
         ),
-        "MedGemmaVQATool": lambda: MedGemmaAPIClientTool(cache_dir=model_dir, device=device, api_url=MEDGEMMA_API_URL)
+        "MedGemmaVQATool": lambda: MedGemmaAPIClientTool(cache_dir=model_dir, device=device, load_in_8bit=True, api_url=MEDGEMMA_API_URL)
     }    
 
     # Initialize only selected tools or all if none specified
@@ -184,9 +184,13 @@ if __name__ == "__main__":
         # "PythonSandboxTool",  # Add the Python sandbox tool
     ]
 
+    # Share a single cache directory and device across tools
+    shared_model_dir = os.getenv("MODEL_WEIGHTS_DIR", "/model-weights")
+    shared_device = os.getenv("MEDRAX_DEVICE", "cuda:0")
+
     # Setup the MedGemma environment if the MedGemmaVQATool is selected
     if "MedGemmaVQATool" in selected_tools:
-        setup_medgemma_env()
+        setup_medgemma_env(cache_dir=shared_model_dir, device=shared_device)
 
     # Configure the Retrieval Augmented Generation (RAG) system
     # This allows the agent to access and use medical knowledge documents
@@ -210,9 +214,9 @@ if __name__ == "__main__":
     agent, tools_dict = initialize_agent(
         prompt_file="medrax/docs/system_prompts.txt",
         tools_to_use=selected_tools,
-        model_dir="/model-weights",
+        model_dir=shared_model_dir,
         temp_dir="temp2",  # Change this to the path of the temporary directory
-        device="cuda:0",
+        device=shared_device,
         model="gpt-5",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro, gpt-5
         temperature=1.0,
         model_kwargs=model_kwargs,

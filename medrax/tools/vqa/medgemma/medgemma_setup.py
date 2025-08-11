@@ -3,7 +3,23 @@ from pathlib import Path
 import subprocess
 import venv
 
-def setup_medgemma_env():
+def _resolve_writable_cache_dir(preferred: str | None) -> str:
+    """Return a writable cache directory, falling back to user cache if needed."""
+    # Preferred path first
+    if preferred:
+        try:
+            os.makedirs(preferred, exist_ok=True)
+            if os.access(preferred, os.W_OK):
+                return preferred
+        except Exception:
+            pass
+    # Fallback path under user's home
+    fallback = os.path.join(Path.home(), ".cache", "medrax", "medgemma")
+    os.makedirs(fallback, exist_ok=True)
+    return fallback
+
+
+def setup_medgemma_env(cache_dir: str | None = None, device: str | None = None):
     """Set up MedGemma virtual environment and launch the FastAPI service.
     
     This function performs the following steps:
@@ -55,10 +71,15 @@ def setup_medgemma_env():
 
     # Launch MedGemma FastAPI service
     print("Launching MedGemma FastAPI service...")
+    env = os.environ.copy()
+    resolved_cache = _resolve_writable_cache_dir(cache_dir)
+    env["MEDGEMMA_CACHE_DIR"] = resolved_cache
+    if device:
+        env["MEDGEMMA_DEVICE"] = device
     subprocess.Popen([
         str(python_executable), 
         str(medgemma_path)
-    ])
+    ], env=env)
     # Note: stdout and stderr redirection commented out for debugging
     # stdout=subprocess.DEVNULL,
     # stderr=subprocess.DEVNULL,

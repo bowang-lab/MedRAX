@@ -59,15 +59,21 @@ class MedGemmaAPIClientTool(BaseTool):
 
     # API configuration
     api_url: str  # The URL of the running FastAPI service
+    cache_dir: Optional[str] = None # Not used by the client directly, but accepted to keep a uniform constructor
+    device: Optional[str] = None
 
-    def __init__(self, api_url: str, **kwargs: Any):
+    def __init__(self, api_url: str, cache_dir: Optional[str] = None, device: Optional[str] = None, timeout_seconds: Optional[float] = None, **kwargs: Any):
         """Initialize the MedGemmaAPIClientTool.
 
         Args:
             api_url: The URL of the running MedGemma FastAPI service
+            cache_dir: Optional local cache directory for model weights (accepted for interface consistency)
+            device: Optional device spec (accepted for interface consistency)
+            timeout_seconds: Optional request timeout override (seconds)
             **kwargs: Additional arguments passed to BaseTool
         """
-        super().__init__(api_url=api_url, **kwargs)
+        super().__init__(api_url=api_url, cache_dir=cache_dir, device=device, **kwargs)
+        self._timeout_seconds = timeout_seconds
 
     def _prepare_request_data(
         self, image_paths: List[str], prompt: str, system_prompt: str, max_new_tokens: int
@@ -149,7 +155,8 @@ class MedGemmaAPIClientTool(BaseTool):
             Tuple of output dictionary and metadata
         """
         # httpx is a modern HTTP client that supports sync and async
-        timeout_config = httpx.Timeout(300.0, connect=10.0)
+        timeout_value = self._timeout_seconds if self._timeout_seconds is not None else 600.0
+        timeout_config = httpx.Timeout(timeout_value, connect=10.0)
         client = httpx.Client(timeout=timeout_config)
         
         try:
@@ -233,11 +240,12 @@ class MedGemmaAPIClientTool(BaseTool):
                     image_paths, prompt, system_prompt, max_new_tokens
                 )
                 
+                timeout_value = self._timeout_seconds if self._timeout_seconds is not None else 600.0
                 response = await client.post(
                     f"{self.api_url}/analyze-images/",
                     data=data,
                     files=files_to_send,
-                    timeout=120.0
+                    timeout=timeout_value
                 )
                 response.raise_for_status()
                 
