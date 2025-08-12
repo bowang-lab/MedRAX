@@ -20,6 +20,8 @@ from langchain_core.callbacks import (
 )
 from langchain_core.tools import BaseTool
 
+from medrax.utils.utils import preprocess_medical_image
+
 
 class ChestXRaySegmentationInput(BaseModel):
     """Input schema for the Chest X-ray Segmentation Tool."""
@@ -228,7 +230,8 @@ class ChestXRaySegmentationTool(BaseTool):
             if len(original_img.shape) > 2:
                 original_img = original_img[:, :, 0]
 
-            img = xrv.datasets.normalize(original_img, 255)
+            # Use robust normalization that handles both 8-bit and 16-bit images
+            img = preprocess_medical_image(original_img)
             img = img[None, ...]
             img = self.transform(img)
             img = torch.from_numpy(img)

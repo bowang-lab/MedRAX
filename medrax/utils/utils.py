@@ -1,6 +1,73 @@
 import os
 import json
-from typing import Dict, List
+import numpy as np
+from typing import Dict, List, Tuple
+
+
+def preprocess_medical_image(
+    image: np.ndarray, 
+    target_range: Tuple[float, float] = (0.0, 1.0),
+    clip_values: bool = True
+) -> np.ndarray:
+    """
+    Preprocess medical images by auto-detecting bit depth and normalizing appropriately.
+    
+    This function handles both 8-bit (0-255) and 16-bit (0-65535) images automatically,
+    normalizing them to the target range. It's designed for medical imaging tools that
+    expect consistent input ranges regardless of the original image bit depth.
+    
+    Args:
+        image (np.ndarray): Input image array (2D or 3D)
+        target_range (Tuple[float, float]): Target range for normalization (default: (0.0, 1.0))
+        clip_values (bool): Whether to clip values to target range (default: True)
+    
+    Returns:
+        np.ndarray: Normalized image in the target range
+        
+    Raises:
+        ValueError: If image is empty or has invalid values
+        ValueError: If target_range is invalid
+    """
+    if image.size == 0:
+        raise ValueError("Input image is empty")
+    
+    if len(target_range) != 2 or target_range[0] >= target_range[1]:
+        raise ValueError("target_range must be a tuple of (min, max) where min < max")
+    
+    # Convert to float for processing
+    image = image.astype(np.float32)
+    
+    # Auto-detect bit depth based on maximum value
+    max_val = np.max(image)
+    min_val = np.min(image)
+    
+    # Determine the expected maximum value based on bit depth
+    if max_val <= 255:
+        # 8-bit image
+        expected_max = 255.0
+    elif max_val <= 65535:
+        # 16-bit image
+        expected_max = 65535.0
+    else:
+        # Higher bit depth or already normalized, use actual max
+        expected_max = max_val
+    
+    # Normalize to 0-1 range first
+    if expected_max > 0:
+        image = (image - min_val) / (expected_max - min_val)
+    else:
+        # Handle edge case where image has no contrast
+        image = np.zeros_like(image)
+    
+    # Scale to target range
+    target_min, target_max = target_range
+    image = image * (target_max - target_min) + target_min
+    
+    # Clip values if requested
+    if clip_values:
+        image = np.clip(image, target_min, target_max)
+    
+    return image
 
 
 def load_prompts_from_file(file_path: str) -> Dict[str, str]:
