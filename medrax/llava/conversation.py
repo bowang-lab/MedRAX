@@ -230,9 +230,7 @@ class Conversation:
                     buffered = BytesIO()
                     image.save(buffered, format="JPEG")
                     img_b64_str = base64.b64encode(buffered.getvalue()).decode()
-                    img_str = (
-                        f'<img src="data:image/png;base64,{img_b64_str}" alt="user upload image" />'
-                    )
+                    img_str = f'<img src="data:image/png;base64,{img_b64_str}" alt="user upload image" />'
                     msg = img_str + msg.replace("<image>", "").strip()
                     ret.append([msg, None])
                 else:

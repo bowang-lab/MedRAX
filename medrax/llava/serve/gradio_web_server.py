@@ -216,9 +216,7 @@ def http_bot(state, model_selector, temperature, top_p, max_new_tokens, request:
     all_image_hash = [hashlib.md5(image.tobytes()).hexdigest() for image in all_images]
     for image, hash in zip(all_images, all_image_hash):
         t = datetime.datetime.now()
-        filename = os.path.join(
-            LOGDIR, "serve_images", f"{t.year}-{t.month:02d}-{t.day:02d}", f"{hash}.jpg"
-        )
+        filename = os.path.join(LOGDIR, "serve_images", f"{t.year}-{t.month:02d}-{t.day:02d}", f"{hash}.jpg")
         if not os.path.isfile(filename):
             os.makedirs(os.path.dirname(filename), exist_ok=True)
             image.save(filename)
@@ -230,9 +228,7 @@ def http_bot(state, model_selector, temperature, top_p, max_new_tokens, request:
         "temperature": float(temperature),
         "top_p": float(top_p),
         "max_new_tokens": min(int(max_new_tokens), 1536),
-        "stop": state.sep
-        if state.sep_style in [SeparatorStyle.SINGLE, SeparatorStyle.MPT]
-        else state.sep2,
+        "stop": state.sep if state.sep_style in [SeparatorStyle.SINGLE, SeparatorStyle.MPT] else state.sep2,
         "images": f"List of {len(state.get_images())} images: {all_image_hash}",
     }
     logger.info(f"==== request ====\n{pload}")
@@ -330,9 +326,7 @@ block_css = """
 
 
 def build_demo(embed_mode):
-    textbox = gr.Textbox(
-        show_label=False, placeholder="Enter text and press ENTER", container=False
-    )
+    textbox = gr.Textbox(show_label=False, placeholder="Enter text and press ENTER", container=False)
     with gr.Blocks(title="LLaVA", theme=gr.themes.Default(), css=block_css) as demo:
         state = gr.State()
 
@@ -468,9 +462,7 @@ def build_demo(embed_mode):
             [state, chatbot] + btn_list,
         )
 
-        clear_btn.click(
-            clear_history, None, [state, chatbot, textbox, imagebox] + btn_list, queue=False
-        )
+        clear_btn.click(clear_history, None, [state, chatbot, textbox, imagebox] + btn_list, queue=False)
 
         textbox.submit(
             add_text,

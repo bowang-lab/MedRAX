@@ -62,9 +62,7 @@ class Agent:
         workflow = StateGraph(AgentState)
         workflow.add_node("agent", self.process_request)
         workflow.add_node("tools", self.tool_node)
-        workflow.add_conditional_edges(
-            "agent", self.has_tool_calls, {True: "tools", False: END}
-        )
+        workflow.add_conditional_edges("agent", self.has_tool_calls, {True: "tools", False: END})
         workflow.add_edge("tools", "agent")
         workflow.set_entry_point("agent")
 
@@ -99,4 +97,3 @@ class Agent:
         """
         response = state["messages"][-1]
         return len(response.tool_calls) > 0
-

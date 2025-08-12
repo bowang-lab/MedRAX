@@ -1,6 +1,7 @@
 """
 A model worker executes the model.
 """
+
 import argparse
 import asyncio
 import json
@@ -155,9 +156,7 @@ class ModelWorker:
         if images is not None and len(images) > 0 and self.is_multimodal:
             if len(images) > 0:
                 if len(images) != prompt.count(DEFAULT_IMAGE_TOKEN):
-                    raise ValueError(
-                        "Number of images does not match number of <image> tokens in prompt"
-                    )
+                    raise ValueError("Number of images does not match number of <image> tokens in prompt")
 
                 images = [load_image_from_base64(image) for image in images]
                 images = process_images(images, image_processor, model.config)
@@ -172,9 +171,7 @@ class ModelWorker:
                     replace_token = DEFAULT_IM_START_TOKEN + replace_token + DEFAULT_IM_END_TOKEN
                 prompt = prompt.replace(DEFAULT_IMAGE_TOKEN, replace_token)
 
-                num_image_tokens = (
-                    prompt.count(replace_token) * model.get_vision_tower().num_patches
-                )
+                num_image_tokens = prompt.count(replace_token) * model.get_vision_tower().num_patches
             else:
                 images = None
             image_args = {"images": images}
@@ -196,19 +193,14 @@ class ModelWorker:
         )
         keywords = [stop_str]
         stopping_criteria = KeywordsStoppingCriteria(keywords, tokenizer, input_ids)
-        streamer = TextIteratorStreamer(
-            tokenizer, skip_prompt=True, skip_special_tokens=True, timeout=15
-        )
+        streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True, timeout=15)
 
-        max_new_tokens = min(
-            max_new_tokens, max_context_length - input_ids.shape[-1] - num_image_tokens
-        )
+        max_new_tokens = min(max_new_tokens, max_context_length - input_ids.shape[-1] - num_image_tokens)
 
         if max_new_tokens < 1:
             yield json.dumps(
                 {
-                    "text": ori_prompt
-                    + "Exceeds max token length. Please start a new conversation, thanks.",
+                    "text": ori_prompt + "Exceeds max token length. Please start a new conversation, thanks.",
                     "error_code": 0,
                 }
             ).encode() + b"\0"

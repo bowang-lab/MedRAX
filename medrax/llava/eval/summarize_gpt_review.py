@@ -14,8 +14,7 @@ def get_domain(x):
 def main(args):
     scores_data = util.load_file_jsonl(args.scores_file)
     predictions = [
-        (x["question_id"], x["type"], get_domain(x), x["gpt_eval"].split("\n")[0].split(" "))
-        for x in scores_data
+        (x["question_id"], x["type"], get_domain(x), x["gpt_eval"].split("\n")[0].split(" ")) for x in scores_data
     ]
 
     score_type_dict = defaultdict(lambda: defaultdict(list))
@@ -33,8 +32,7 @@ def main(args):
         result[q_type]["gpt4_score"] = util.get_avg(score_dict[1])
         result[q_type]["pred_score"] = util.get_avg(score_dict[2])
         result[q_type]["pred_relative_score"] = (
-            util.get_avg([float(s2) / float(s1) for s1, s2 in zip(score_dict[1], score_dict[2])])
-            * 100
+            util.get_avg([float(s2) / float(s1) for s1, s2 in zip(score_dict[1], score_dict[2])]) * 100
         )
         result[q_type]["data_size"] = len(score_dict[1])
 
@@ -55,8 +53,6 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("GPT-4 Multimodal Chat Eval Postprocessing", add_help=True)
-    parser.add_argument(
-        "--scores-file", default="", metavar="FILE", help="input path to gpt-4 score file"
-    )
+    parser.add_argument("--scores-file", default="", metavar="FILE", help="input path to gpt-4 score file")
     args = parser.parse_args()
     main(args)

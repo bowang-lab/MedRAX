@@ -83,13 +83,7 @@ class LlavaMedTool(BaseTool):
         self, question: str, image_path: Optional[str] = None
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         if self.model.config.mm_use_im_start_end:
-            question = (
-                DEFAULT_IM_START_TOKEN
-                + DEFAULT_IMAGE_TOKEN
-                + DEFAULT_IM_END_TOKEN
-                + "\n"
-                + question
-            )
+            question = DEFAULT_IM_START_TOKEN + DEFAULT_IMAGE_TOKEN + DEFAULT_IM_END_TOKEN + "\n" + question
         else:
             question = DEFAULT_IMAGE_TOKEN + "\n" + question
 
@@ -99,9 +93,7 @@ class LlavaMedTool(BaseTool):
         prompt = conv.get_prompt()
 
         input_ids = (
-            tokenizer_image_token(prompt, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt")
-            .unsqueeze(0)
-            .cuda()
+            tokenizer_image_token(prompt, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0).cuda()
         )
 
         image_tensor = None
@@ -147,11 +139,11 @@ class LlavaMedTool(BaseTool):
                 )
 
             answer = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
-            
+
             output = {
                 "answer": answer,
             }
-           
+
             metadata = {
                 "question": question,
                 "image_path": image_path,

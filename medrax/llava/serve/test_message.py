@@ -17,9 +17,7 @@ def main():
         models.sort()
         print(f"Models: {models}")
 
-        ret = requests.post(
-            controller_addr + "/get_worker_address", json={"model": args.model_name}
-        )
+        ret = requests.post(controller_addr + "/get_worker_address", json={"model": args.model_name})
         worker_addr = ret.json()["address"]
         print(f"worker_addr: {worker_addr}")
 
@@ -38,9 +36,7 @@ def main():
         "temperature": 0.7,
         "stop": conv.sep2,
     }
-    response = requests.post(
-        worker_addr + "/worker_generate_stream", headers=headers, json=pload, stream=True
-    )
+    response = requests.post(worker_addr + "/worker_generate_stream", headers=headers, json=pload, stream=True)
 
     print(prompt, end="")
     for chunk in response.iter_lines(chunk_size=8192, decode_unicode=False, delimiter=b"\0"):
