@@ -12,6 +12,7 @@ with different model weights, tools, and parameters.
 import warnings
 import os
 import argparse
+from pyngrok import ngrok
 import threading
 import uvicorn
 from typing import Dict, List, Optional, Any
@@ -156,7 +157,7 @@ def run_gradio_interface(agent, tools_dict, host="0.0.0.0", port=8686):
     demo.launch(server_name=host, server_port=port, share=True)
 
 
-def run_api_server(agent, tools_dict, host="0.0.0.0", port=8000):
+def run_api_server(agent, tools_dict, host="0.0.0.0", port=8585, public=False):
     """
     Run the FastAPI server.
     
@@ -165,10 +166,33 @@ def run_api_server(agent, tools_dict, host="0.0.0.0", port=8000):
         tools_dict: Dictionary of available tools
         host (str): Host to bind the server to
         port (int): Port to run the server on
+        public (bool): Whether to expose via ngrok tunnel
     """
     print(f"Starting API server on {host}:{port}")
+    
+    if public:
+        try:
+            public_tunnel = ngrok.connect(port)
+            public_url = public_tunnel.public_url
+            print(f"🌍 Public URL: {public_url}\n🌍 API Documentation: {public_url}/docs\n🌍 Share this URL with your friend!\n{'=' * 60}")
+        except ImportError:
+            print("⚠️  pyngrok not installed. Install with: pip install pyngrok\nRunning locally only...")
+            public = False
+        except Exception as e:
+            print(f"⚠️  Failed to create public tunnel: {e}\nRunning locally only...")
+            public = False
+    
     app = create_api(agent, tools_dict)
-    uvicorn.run(app, host=host, port=port)
+    
+    try:
+        uvicorn.run(app, host=host, port=port)
+    finally:
+        if public:
+            try:
+                ngrok.disconnect(public_tunnel.public_url)
+                ngrok.kill()
+            except:
+                pass
 
 
 def parse_arguments():
@@ -186,6 +210,7 @@ def parse_arguments():
     parser.add_argument("--gradio-port", type=int, default=8686, help="Gradio port")
     parser.add_argument("--api-host", default="0.0.0.0", help="API host address")
     parser.add_argument("--api-port", type=int, default=8000, help="API port")
+    parser.add_argument("--public", action="store_true", help="Make API publicly accessible via ngrok tunnel")
     
     # Model and system configuration
     parser.add_argument(
@@ -328,7 +353,7 @@ if __name__ == "__main__":
             "XRayPhraseGroundingTool",  # For locating described features in X-rays
 
             # VQA Tools
-            "MedGemmaVQATool",  # Google MedGemma VQA tool
+            # "MedGemmaVQATool",  # Google MedGemma VQA tool
             "XRayVQATool",  # For visual question answering on X-rays
             # "LlavaMedTool",  # For multimodal medical image understanding
 
@@ -336,7 +361,7 @@ if __name__ == "__main__":
             "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
 
             # Search Tools
-            "WebBrowserTool",  # For web browsing and search capabilities
+            # "WebBrowserTool",  # For web browsing and search capabilities
             "DuckDuckGoSearchTool",  # For privacy-focused web search using DuckDuckGo
 
             # Development Tools
@@ -351,6 +376,7 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
     print(f"Using model: {args.model}")
     print(f"Selected tools: {selected_tools}")
+    print(f"Using system prompt: {args.system_prompt}")
 
     # Setup the MedGemma environment if the MedGemmaVQATool is selected
     if "MedGemmaVQATool" in selected_tools:
@@ -393,13 +419,13 @@ if __name__ == "__main__":
         run_gradio_interface(agent, tools_dict, args.gradio_host, args.gradio_port)
 
     elif args.mode == "api":
-        run_api_server(agent, tools_dict, args.api_host, args.api_port)
+        run_api_server(agent, tools_dict, args.api_host, args.api_port, args.public)
 
     elif args.mode == "both":
         # Run both services in separate threads
         api_thread = threading.Thread(
             target=run_api_server, 
-            args=(agent, tools_dict, args.api_host, args.api_port)
+            args=(agent, tools_dict, args.api_host, args.api_port, args.public)
         )
         api_thread.daemon = True
         api_thread.start()

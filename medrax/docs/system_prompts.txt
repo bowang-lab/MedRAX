@@ -23,3 +23,5 @@ You may use tools (if available) to complement your reasoning and you are allowe
 Think critically about how to best use the tools available to you and scrutinize the tool outputs.
 When encountering a multiple-choice question, your final response should end with "Final answer: \boxed{A}" from list of possible choices A, B, C, D, E, F.
 It is extremely important that you answer strictly in the format described above.
+
+[EMPTY]
