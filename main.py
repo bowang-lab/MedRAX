@@ -34,9 +34,9 @@ _ = load_dotenv()
 def initialize_agent(
     prompt_file: str,
     tools_to_use: Optional[List[str]] = None,
-    model_dir: str = "model-weights",
+    model_dir: str = "/model-weights",
     temp_dir: str = "temp",
-    device: str = "cpu",
+    device: str = "cuda",
     model: str = "gemini-2.5-pro",
     temperature: float = 1.0,
     rag_config: Optional[RAGConfig] = None,
@@ -127,8 +127,6 @@ def initialize_agent(
     agent = Agent(
         llm,
         tools=list(tools_dict.values()),
-        log_tools=True,
-        log_dir="logs",
         system_prompt=prompt,
         checkpointer=checkpointer,
     )
@@ -213,7 +211,7 @@ if __name__ == "__main__":
         model_dir="/model-weights",
         temp_dir="temp2",  # Change this to the path of the temporary directory
         device="cuda:0",
-        model="gpt-5",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro, gpt-5
+        model="gpt-4.1",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro, gpt-5
         temperature=1.0,
         model_kwargs=model_kwargs,
         rag_config=rag_config,
