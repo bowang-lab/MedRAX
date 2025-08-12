@@ -11,26 +11,15 @@ from langchain_core.tools import BaseTool
 
 class ChestXRayGeneratorInput(BaseModel):
     """Input schema for the Chest X-Ray Generator Tool."""
-    
+
     prompt: str = Field(
-        ..., 
-        description="Description of the medical condition to generate (e.g., 'big left-sided pleural effusion')"
+        ..., description="Description of the medical condition to generate (e.g., 'big left-sided pleural effusion')"
     )
-    height: int = Field(
-        512,
-        description="Height of generated image in pixels"
-    )
-    width: int = Field(
-        512,
-        description="Width of generated image in pixels"
-    )
-    num_inference_steps: int = Field(
-        75,
-        description="Number of denoising steps (higher = better quality but slower)"
-    )
+    height: int = Field(512, description="Height of generated image in pixels")
+    width: int = Field(512, description="Width of generated image in pixels")
+    num_inference_steps: int = Field(75, description="Number of denoising steps (higher = better quality but slower)")
     guidance_scale: float = Field(
-        4.0,
-        description="How closely to follow the prompt (higher = more faithful but less diverse)"
+        4.0, description="How closely to follow the prompt (higher = more faithful but less diverse)"
     )
 
 
@@ -60,11 +49,11 @@ class ChestXRayGeneratorTool(BaseTool):
     ):
         """Initialize the chest X-ray generator tool."""
         super().__init__()
-        
+
         self.device = torch.device(device) if device else "cuda"
         self.model = StableDiffusionPipeline.from_pretrained(model_path, cache_dir=cache_dir)
         self.model = self.model.to(torch.float32).to(self.device)
-        
+
         self.temp_dir = Path(temp_dir if temp_dir else tempfile.mkdtemp())
         self.temp_dir.mkdir(exist_ok=True)
 
@@ -97,7 +86,7 @@ class ChestXRayGeneratorTool(BaseTool):
                 num_inference_steps=num_inference_steps,
                 height=height,
                 width=width,
-                guidance_scale=guidance_scale
+                guidance_scale=guidance_scale,
             )
 
             # Save generated image
@@ -107,7 +96,7 @@ class ChestXRayGeneratorTool(BaseTool):
             output = {
                 "image_path": str(image_path),
             }
-            
+
             metadata = {
                 "prompt": prompt,
                 "num_inference_steps": num_inference_steps,
@@ -126,7 +115,7 @@ class ChestXRayGeneratorTool(BaseTool):
                     "prompt": prompt,
                     "analysis_status": "failed",
                     "error_details": str(e),
-                }
+                },
             )
 
     async def _arun(

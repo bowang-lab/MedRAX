@@ -15,13 +15,9 @@ from langchain_core.tools import BaseTool
 class XRayVQAToolInput(BaseModel):
     """Input schema for the CheXagent Tool."""
 
-    image_paths: List[str] = Field(
-        ..., description="List of paths to chest X-ray images to analyze"
-    )
+    image_paths: List[str] = Field(..., description="List of paths to chest X-ray images to analyze")
     prompt: str = Field(..., description="Question or instruction about the chest X-ray images")
-    max_new_tokens: int = Field(
-        512, description="Maximum number of tokens to generate in the response"
-    )
+    max_new_tokens: int = Field(512, description="Maximum number of tokens to generate in the response")
 
 
 class CheXagentXRayVQATool(BaseTool):
@@ -99,16 +95,14 @@ class CheXagentXRayVQATool(BaseTool):
         Returns:
             str: Model's response
         """
-        query = self.tokenizer.from_list_format(
-            [*[{"image": path} for path in image_paths], {"text": prompt}]
-        )
+        query = self.tokenizer.from_list_format([*[{"image": path} for path in image_paths], {"text": prompt}])
         conv = [
             {"from": "system", "value": "You are a helpful assistant."},
             {"from": "human", "value": query},
         ]
-        input_ids = self.tokenizer.apply_chat_template(
-            conv, add_generation_prompt=True, return_tensors="pt"
-        ).to(device=self.device)
+        input_ids = self.tokenizer.apply_chat_template(conv, add_generation_prompt=True, return_tensors="pt").to(
+            device=self.device
+        )
 
         # Run inference
         with torch.inference_mode():

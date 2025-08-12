@@ -12,13 +12,13 @@ from langchain_core.callbacks import (
 )
 from langchain_core.tools import BaseTool
 
+from medrax.utils.utils import preprocess_medical_image
+
 
 class TorchXRayVisionInput(BaseModel):
     """Input for TorchXRayVision chest X-ray analysis tools. Only supports JPG or PNG images."""
 
-    image_path: str = Field(
-        ..., description="Path to the radiology image file, only supports JPG or PNG images"
-    )
+    image_path: str = Field(..., description="Path to the radiology image file, only supports JPG or PNG images")
 
 
 class TorchXRayVisionClassifierTool(BaseTool):
@@ -76,7 +76,9 @@ class TorchXRayVisionClassifierTool(BaseTool):
             ValueError: If the image cannot be properly loaded or processed.
         """
         img = skimage.io.imread(image_path)
-        img = xrv.datasets.normalize(img, 255)
+        
+        # Use robust normalization that handles both 8-bit and 16-bit images
+        img = preprocess_medical_image(img, target_range=(-1024.0, 1024.0))
 
         if len(img.shape) > 2:
             img = img[:, :, 0]

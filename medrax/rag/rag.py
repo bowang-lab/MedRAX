@@ -107,9 +107,7 @@ class CohereRAG:
         # Initialize Pinecone
         self.pinecone_api_key = os.getenv("PINECONE_API_KEY")
         if not self.pinecone_api_key:
-            raise ValueError(
-                "PINECONE_API_KEY environment variable not set. Please get a key from app.pinecone.io"
-            )
+            raise ValueError("PINECONE_API_KEY environment variable not set. Please get a key from app.pinecone.io")
         self.pinecone = Pinecone(api_key=self.pinecone_api_key)
         self.index_name = self.config.pinecone_index_name
 
@@ -161,9 +159,7 @@ class CohereRAG:
             )
 
         print(f"Connecting to existing Pinecone index: {self.index_name}")
-        vectorstore = PineconeVectorStore.from_existing_index(
-            index_name=self.index_name, embedding=self.embeddings
-        )
+        vectorstore = PineconeVectorStore.from_existing_index(index_name=self.index_name, embedding=self.embeddings)
 
         # Check if the index is empty and needs to be populated
         try:
@@ -329,9 +325,7 @@ class CohereRAG:
                 )
                 documents.append(doc)
 
-            print(
-                f"Loaded {len(documents)} document chunks from HuggingFace dataset: {dataset_name}"
-            )
+            print(f"Loaded {len(documents)} document chunks from HuggingFace dataset: {dataset_name}")
             return documents
 
         except Exception as e:

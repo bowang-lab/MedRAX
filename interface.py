@@ -68,9 +68,7 @@ class ChatInterface:
 
         return self.display_file_path
 
-    def add_message(
-        self, message: str, display_image: str, history: List[dict]
-    ) -> Tuple[List[dict], gr.Textbox]:
+    def add_message(self, message: str, display_image: str, history: List[dict]) -> Tuple[List[dict], gr.Textbox]:
         """
         Add a new message to the chat history.
 
@@ -155,9 +153,7 @@ class ChatInterface:
                         if isinstance(msg, AIMessageChunk) and msg.content:
                             accumulated_content += msg.content
                             if final_message is None:
-                                final_message = ChatMessage(
-                                    role="assistant", content=accumulated_content
-                                )
+                                final_message = ChatMessage(role="assistant", content=accumulated_content)
                                 chat_history.append(final_message)
                             else:
                                 final_message.content = accumulated_content
@@ -169,9 +165,7 @@ class ChatInterface:
                                 if final_message:
                                     final_message.content = final_content
                                 else:
-                                    chat_history.append(
-                                        ChatMessage(role="assistant", content=final_content)
-                                    )
+                                    chat_history.append(ChatMessage(role="assistant", content=final_content))
                                 yield chat_history, self.display_file_path, ""
 
                             if msg.tool_calls:
@@ -204,7 +198,7 @@ class ChatInterface:
                                     except json.JSONDecodeError:
                                         result = msg.content
                                         tool_output_str = str(msg.content)
-                                
+
                                 # Display tool usage card
                                 tool_args_str = json.dumps(tool_args, indent=2)
                                 description = f"**Input:**\n```json\n{tool_args_str}\n```\n\n**Output:**\n```json\n{tool_output_str}\n```"
@@ -231,7 +225,7 @@ class ChatInterface:
                                             image_path = result[0]["image_path"]
                                         except (TypeError, KeyError, IndexError):
                                             pass
-                                    
+
                                     if image_path:
                                         self.display_file_path = image_path
                                         chat_history.append(
@@ -240,16 +234,13 @@ class ChatInterface:
                                                 content={"path": self.display_file_path},
                                             )
                                         )
-                                
+
                                 # Yield a single update for this tool event
                                 yield chat_history, self.display_file_path, ""
 
-
         except Exception as e:
             chat_history.append(
-                ChatMessage(
-                    role="assistant", content=f"❌ Error: {str(e)}", metadata={"title": "Error"}
-                )
+                ChatMessage(role="assistant", content=f"❌ Error: {str(e)}", metadata={"title": "Error"})
             )
             yield chat_history, self.display_file_path, ""
 
@@ -300,9 +291,7 @@ def create_demo(agent, tools_dict):
                             )
 
                 with gr.Column(scale=3):
-                    image_display = gr.Image(
-                        label="Image", type="filepath", height=600, container=True
-                    )
+                    image_display = gr.Image(label="Image", type="filepath", height=600, container=True)
                     with gr.Row():
                         upload_button = gr.UploadButton(
                             "📎 Upload X-Ray",
@@ -325,9 +314,7 @@ def create_demo(agent, tools_dict):
         def handle_file_upload(file):
             return interface.handle_upload(file.name)
 
-        chat_msg = txt.submit(
-            interface.add_message, inputs=[txt, image_display, chatbot], outputs=[chatbot, txt]
-        )
+        chat_msg = txt.submit(interface.add_message, inputs=[txt, image_display, chatbot], outputs=[chatbot, txt])
         bot_msg = chat_msg.then(
             interface.process_message,
             inputs=[txt, image_display, chatbot],

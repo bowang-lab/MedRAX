@@ -38,9 +38,7 @@ class OmniSwinTransformer(SwinTransformer):
 
         self.omni_heads = []
         for num_classes in num_classes_list:
-            self.omni_heads.append(
-                nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
-            )
+            self.omni_heads.append(nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity())
         self.omni_heads = nn.ModuleList(self.omni_heads)
 
     def forward(self, x, head_n=None):
@@ -62,9 +60,7 @@ class OmniSwinTransformer(SwinTransformer):
 class ArcPlusInput(BaseModel):
     """Input for ArcPlus chest X-ray analysis tool. Only supports JPG or PNG images."""
 
-    image_path: str = Field(
-        ..., description="Path to the radiology image file, only supports JPG or PNG images"
-    )
+    image_path: str = Field(..., description="Path to the radiology image file, only supports JPG or PNG images")
 
 
 class ArcPlusClassifierTool(BaseTool):
@@ -249,11 +245,7 @@ class ArcPlusClassifierTool(BaseTool):
 
         # Remove "module." prefix if present (improved logic from example)
         if any([True if "module." in k else False for k in state_dict.keys()]):
-            state_dict = {
-                k.replace("module.", ""): v
-                for k, v in state_dict.items()
-                if k.startswith("module.")
-            }
+            state_dict = {k.replace("module.", ""): v for k, v in state_dict.items() if k.startswith("module.")}
 
         # Load the model weights
         msg = self.model.load_state_dict(state_dict, strict=False)
@@ -333,14 +325,10 @@ class ArcPlusClassifierTool(BaseTool):
 
             # Map predictions to disease names
             if len(predictions) != len(self.disease_list):
-                print(
-                    f"Warning: Expected {len(self.disease_list)} predictions, got {len(predictions)}"
-                )
+                print(f"Warning: Expected {len(self.disease_list)} predictions, got {len(predictions)}")
                 # Pad or truncate as needed
                 if len(predictions) < len(self.disease_list):
-                    predictions = np.pad(
-                        predictions, (0, len(self.disease_list) - len(predictions))
-                    )
+                    predictions = np.pad(predictions, (0, len(self.disease_list) - len(predictions)))
                 else:
                     predictions = predictions[: len(self.disease_list)]
 

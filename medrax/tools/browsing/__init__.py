@@ -6,8 +6,8 @@ from .web_browser import WebBrowserTool, WebBrowserSchema, SearchQuerySchema, Vi
 __all__ = [
     "DuckDuckGoSearchTool",
     "WebSearchInput",
-    "WebBrowserTool", 
+    "WebBrowserTool",
     "WebBrowserSchema",
     "SearchQuerySchema",
-    "VisitUrlSchema"
-] 
+    "VisitUrlSchema",
+]

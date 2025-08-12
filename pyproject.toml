@@ -74,6 +74,7 @@ dependencies = [
     "huggingface_hub>=0.17.0",
     "iopath>=0.1.10",
     "duckduckgo-search>=4.0.0",
+    "pyngrok>=7.0.0",
 ]
 
 [project.optional-dependencies]

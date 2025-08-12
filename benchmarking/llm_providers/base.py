@@ -85,7 +85,7 @@ class LLMProvider(ABC):
         try:
             # Simple test request
             test_request = LLMRequest(
-                text="Hello",
+                text="Hello! What model are you? Tell me your full specification.",
                 temperature=0.5,
                 max_tokens=1000
             )

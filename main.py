@@ -12,6 +12,7 @@ with different model weights, tools, and parameters.
 import warnings
 import os
 import argparse
+from pyngrok import ngrok
 import threading
 import uvicorn
 from typing import Dict, List, Optional, Any
@@ -107,9 +108,7 @@ def initialize_agent(
         "ChestXRaySegmentationTool": lambda: ChestXRaySegmentationTool(device=device),
         "LlavaMedTool": lambda: LlavaMedTool(cache_dir=model_dir, device=device, load_in_8bit=True),
         "CheXagentXRayVQATool": lambda: CheXagentXRayVQATool(cache_dir=model_dir, device=device),
-        "ChestXRayReportGeneratorTool": lambda: ChestXRayReportGeneratorTool(
-            cache_dir=model_dir, device=device
-        ),
+        "ChestXRayReportGeneratorTool": lambda: ChestXRayReportGeneratorTool(cache_dir=model_dir, device=device),
         "XRayPhraseGroundingTool": lambda: XRayPhraseGroundingTool(
             cache_dir=model_dir, temp_dir=temp_dir, load_in_8bit=True, device=device
         ),
@@ -121,15 +120,13 @@ def initialize_agent(
         "MedicalRAGTool": lambda: RAGTool(config=rag_config),
         "WebBrowserTool": lambda: WebBrowserTool(),
         "DuckDuckGoSearchTool": lambda: DuckDuckGoSearchTool(),
-        "MedSAM2Tool": lambda: MedSAM2Tool(
-            device=device, cache_dir=model_dir, temp_dir=temp_dir
-        ),
+        "MedSAM2Tool": lambda: MedSAM2Tool(device=device, cache_dir=model_dir, temp_dir=temp_dir),
         "MedGemmaVQATool": lambda: MedGemmaAPIClientTool(
             cache_dir=model_dir,
             device=device,
             load_in_8bit=True,
-            api_url=resolve_medgemma_api_url_from_value(medgemma_api_url)
-        )
+            api_url=resolve_medgemma_api_url_from_value(medgemma_api_url),
+        ),
     }
 
     # Initialize only selected tools or all if none specified
@@ -137,7 +134,7 @@ def initialize_agent(
 
     if tools_to_use is None:
         tools_to_use = []
-        
+
     for tool_name in tools_to_use:
         if tool_name == "PythonSandboxTool":
             try:
@@ -147,16 +144,13 @@ def initialize_agent(
                 print("Skipping PythonSandboxTool")
         if tool_name in all_tools:
             tools_dict[tool_name] = all_tools[tool_name]()
-    
 
     # Set up checkpointing for conversation state
     checkpointer = MemorySaver()
 
     # Create the language model using the factory
     try:
-        llm = ModelFactory.create_model(
-            model_name=model, temperature=temperature, **model_kwargs
-        )
+        llm = ModelFactory.create_model(model_name=model, temperature=temperature, **model_kwargs)
     except ValueError as e:
         print(f"Error creating language model: {e}")
         print(f"Available model providers: {list(ModelFactory._model_providers.keys())}")
@@ -176,7 +170,7 @@ def initialize_agent(
 def run_gradio_interface(agent, tools_dict, host="0.0.0.0", port=8686):
     """
     Run the Gradio web interface.
-    
+
     Args:
         agent: The initialized MedRAX agent
         tools_dict: Dictionary of available tools
@@ -188,136 +182,115 @@ def run_gradio_interface(agent, tools_dict, host="0.0.0.0", port=8686):
     demo.launch(server_name=host, server_port=port, share=True)
 
 
-def run_api_server(agent, tools_dict, host="0.0.0.0", port=8000):
+def run_api_server(agent, tools_dict, host="0.0.0.0", port=8585, public=False):
     """
     Run the FastAPI server.
-    
+
     Args:
         agent: The initialized MedRAX agent
         tools_dict: Dictionary of available tools
         host (str): Host to bind the server to
         port (int): Port to run the server on
+        public (bool): Whether to expose via ngrok tunnel
     """
     print(f"Starting API server on {host}:{port}")
+
+    if public:
+        try:
+            public_tunnel = ngrok.connect(port)
+            public_url = public_tunnel.public_url
+            print(
+                f"🌍 Public URL: {public_url}\n🌍 API Documentation: {public_url}/docs\n🌍 Share this URL with your friend!\n{'=' * 60}"
+            )
+        except ImportError:
+            print("⚠️  pyngrok not installed. Install with: pip install pyngrok\nRunning locally only...")
+            public = False
+        except Exception as e:
+            print(f"⚠️  Failed to create public tunnel: {e}\nRunning locally only...")
+            public = False
+
     app = create_api(agent, tools_dict)
-    uvicorn.run(app, host=host, port=port)
+
+    try:
+        uvicorn.run(app, host=host, port=port)
+    finally:
+        if public:
+            try:
+                ngrok.disconnect(public_tunnel.public_url)
+                ngrok.kill()
+            except:
+                pass
 
 
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="MedRAX - Medical Reasoning Agent for Chest X-ray")
-    
+
     # Server configuration
     parser.add_argument(
-        "--mode", 
-        choices=["gradio", "api", "both"], 
+        "--mode",
+        choices=["gradio", "api", "both"],
         default="gradio",
-        help="Run mode: 'gradio' for web interface, 'api' for REST API, 'both' for both services"
+        help="Run mode: 'gradio' for web interface, 'api' for REST API, 'both' for both services",
     )
     parser.add_argument("--gradio-host", default="0.0.0.0", help="Gradio host address")
     parser.add_argument("--gradio-port", type=int, default=8686, help="Gradio port")
     parser.add_argument("--api-host", default="0.0.0.0", help="API host address")
     parser.add_argument("--api-port", type=int, default=8000, help="API port")
-    
+    parser.add_argument("--public", action="store_true", help="Make API publicly accessible via ngrok tunnel")
+
     # Model and system configuration
     parser.add_argument(
-        "--model-dir", 
+        "--model-dir",
         default="/model-weights",
-        help="Directory containing model weights (default: uses MODEL_WEIGHTS_DIR env var or '/model-weights')"
+        help="Directory containing model weights (default: uses MODEL_WEIGHTS_DIR env var or '/model-weights')",
     )
     parser.add_argument(
-        "--device", 
-        default="cuda",
-        help="Device to run models on (default: uses MEDRAX_DEVICE env var or 'cuda:1')"
+        "--device", default="cuda", help="Device to run models on (default: uses MEDRAX_DEVICE env var or 'cuda:1')"
     )
     parser.add_argument(
-        "--model", 
+        "--model",
         default="gpt-4.1",
-        help="Model to use (default: gpt-4.1). Examples: gpt-4.1-2025-04-14, gemini-2.5-pro, gpt-5"
+        help="Model to use (default: gpt-4.1). Examples: gpt-4.1-2025-04-14, gemini-2.5-pro, gpt-5",
     )
+    parser.add_argument("--temperature", type=float, default=1.0, help="Temperature for the model (default: 1.0)")
+    parser.add_argument("--temp-dir", default="temp2", help="Directory for temporary files (default: temp2)")
     parser.add_argument(
-        "--temperature", 
-        type=float, 
-        default=1.0,
-        help="Temperature for the model (default: 1.0)"
-    )
-    parser.add_argument(
-        "--temp-dir", 
-        default="temp2",
-        help="Directory for temporary files (default: temp2)"
-    )
-    parser.add_argument(
-        "--prompt-file", 
+        "--prompt-file",
         default="medrax/docs/system_prompts.txt",
-        help="Path to file containing system prompts (default: medrax/docs/system_prompts.txt)"
+        help="Path to file containing system prompts (default: medrax/docs/system_prompts.txt)",
     )
     parser.add_argument(
-        "--system-prompt", 
-        default="MEDICAL_ASSISTANT",
-        help="System prompt to use (default: MEDICAL_ASSISTANT)"
+        "--system-prompt", default="MEDICAL_ASSISTANT", help="System prompt to use (default: MEDICAL_ASSISTANT)"
     )
-    
+
     # RAG configuration
     parser.add_argument(
-        "--rag-model", 
-        default="command-a-03-2025",
-        help="Chat model for RAG responses (default: command-a-03-2025)"
+        "--rag-model", default="command-a-03-2025", help="Chat model for RAG responses (default: command-a-03-2025)"
     )
     parser.add_argument(
-        "--rag-embedding-model", 
-        default="embed-v4.0",
-        help="Embedding model for RAG system (default: embed-v4.0)"
+        "--rag-embedding-model", default="embed-v4.0", help="Embedding model for RAG system (default: embed-v4.0)"
     )
     parser.add_argument(
-        "--rag-rerank-model", 
-        default="rerank-v3.5",
-        help="Reranking model for RAG system (default: rerank-v3.5)"
+        "--rag-rerank-model", default="rerank-v3.5", help="Reranking model for RAG system (default: rerank-v3.5)"
     )
-    parser.add_argument(
-        "--rag-temperature", 
-        type=float, 
-        default=0.3,
-        help="Temperature for RAG model (default: 0.3)"
-    )
-    parser.add_argument(
-        "--pinecone-index", 
-        default="medrax2",
-        help="Pinecone index name (default: medrax2)"
-    )
-    parser.add_argument(
-        "--chunk-size", 
-        type=int, 
-        default=1500,
-        help="RAG chunk size (default: 1500)"
-    )
-    parser.add_argument(
-        "--chunk-overlap", 
-        type=int, 
-        default=300,
-        help="RAG chunk overlap (default: 300)"
-    )
-    parser.add_argument(
-        "--retriever-k", 
-        type=int, 
-        default=3,
-        help="Number of documents to retrieve (default: 3)"
-    )
-    parser.add_argument(
-        "--rag-docs-dir", 
-        default="rag_docs",
-        help="Directory for RAG documents (default: rag_docs)"
-    )
-    
+    parser.add_argument("--rag-temperature", type=float, default=0.3, help="Temperature for RAG model (default: 0.3)")
+    parser.add_argument("--pinecone-index", default="medrax2", help="Pinecone index name (default: medrax2)")
+    parser.add_argument("--chunk-size", type=int, default=1500, help="RAG chunk size (default: 1500)")
+    parser.add_argument("--chunk-overlap", type=int, default=300, help="RAG chunk overlap (default: 300)")
+    parser.add_argument("--retriever-k", type=int, default=3, help="Number of documents to retrieve (default: 3)")
+    parser.add_argument("--rag-docs-dir", default="rag_docs", help="Directory for RAG documents (default: rag_docs)")
+
     # Tools configuration
     parser.add_argument(
-        "--tools", 
+        "--tools",
         nargs="*",
-        help="Specific tools to enable (if not provided, uses default set). Available tools: " +
-             "ImageVisualizerTool, DicomProcessorTool, MedSAM2Tool, ChestXRaySegmentationTool, " +
-             "ChestXRayGeneratorTool, TorchXRayVisionClassifierTool, ArcPlusClassifierTool, " +
-             "ChestXRayReportGeneratorTool, XRayPhraseGroundingTool, MedGemmaVQATool, " +
-             "XRayVQATool, LlavaMedTool, MedicalRAGTool, WebBrowserTool, DuckDuckGoSearchTool, " +
-             "PythonSandboxTool"
+        help="Specific tools to enable (if not provided, uses default set). Available tools: "
+        + "ImageVisualizerTool, DicomProcessorTool, MedSAM2Tool, ChestXRaySegmentationTool, "
+        + "ChestXRayGeneratorTool, TorchXRayVisionClassifierTool, ArcPlusClassifierTool, "
+        + "ChestXRayReportGeneratorTool, XRayPhraseGroundingTool, MedGemmaVQATool, "
+        + "XRayVQATool, LlavaMedTool, MedicalRAGTool, WebBrowserTool, DuckDuckGoSearchTool, "
+        + "PythonSandboxTool",
     )
 
     # MedGemma API configuration
@@ -326,7 +299,7 @@ def parse_arguments():
         default=None,
         help="MedGemma API base URL, e.g. http://127.0.0.1:8002 or http://<node-ip>:8002"
     )
-    
+
     return parser.parse_args()
 
 
@@ -348,36 +321,27 @@ if __name__ == "__main__":
             # Image Processing Tools
             "ImageVisualizerTool",  # For displaying images in the UI
             # "DicomProcessorTool",  # For processing DICOM medical image files
-
             # Segmentation Tools
             "MedSAM2Tool",  # For advanced medical image segmentation using MedSAM2
             "ChestXRaySegmentationTool",  # For segmenting anatomical regions in chest X-rays
-
             # Generation Tools
             # "ChestXRayGeneratorTool",  # For generating synthetic chest X-rays
-
             # Classification Tools
             "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
             "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
-
             # Report Generation Tools
             "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
-
             # Grounding Tools
             "XRayPhraseGroundingTool",  # For locating described features in X-rays
-
             # VQA Tools
-            "MedGemmaVQATool",  # Google MedGemma VQA tool
+            # "MedGemmaVQATool",  # Google MedGemma VQA tool
             "XRayVQATool",  # For visual question answering on X-rays
             # "LlavaMedTool",  # For multimodal medical image understanding
-
             # RAG Tools
             "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
-
             # Search Tools
-            "WebBrowserTool",  # For web browsing and search capabilities
+            # "WebBrowserTool",  # For web browsing and search capabilities
             "DuckDuckGoSearchTool",  # For privacy-focused web search using DuckDuckGo
-
             # Development Tools
             # "PythonSandboxTool",  # Add the Python sandbox tool
         ]
@@ -390,6 +354,7 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
     print(f"Using model: {args.model}")
     print(f"Selected tools: {selected_tools}")
+    print(f"Using system prompt: {args.system_prompt}")
 
     # Setup the MedGemma environment if the MedGemmaVQATool is selected
     medgemma_base_url_from_setup: Optional[str] = None
@@ -447,16 +412,15 @@ if __name__ == "__main__":
         run_gradio_interface(agent, tools_dict, args.gradio_host, args.gradio_port)
 
     elif args.mode == "api":
-        run_api_server(agent, tools_dict, args.api_host, args.api_port)
+        run_api_server(agent, tools_dict, args.api_host, args.api_port, args.public)
 
     elif args.mode == "both":
         # Run both services in separate threads
         api_thread = threading.Thread(
-            target=run_api_server, 
-            args=(agent, tools_dict, args.api_host, args.api_port)
+            target=run_api_server, args=(agent, tools_dict, args.api_host, args.api_port, args.public)
         )
         api_thread.daemon = True
         api_thread.start()
-        
+
         # Run Gradio in main thread
         run_gradio_interface(agent, tools_dict, args.gradio_host, args.gradio_port)

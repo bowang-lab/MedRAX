@@ -2,6 +2,7 @@
 A controller manages distributed workers.
 It sends worker addresses to clients.
 """
+
 import argparse
 import dataclasses
 from enum import Enum, auto
@@ -199,9 +200,7 @@ class Controller:
             yield json.dumps(ret).encode() + b"\0"
 
         try:
-            response = requests.post(
-                worker_addr + "/worker_generate_stream", json=params, stream=True, timeout=5
-            )
+            response = requests.post(worker_addr + "/worker_generate_stream", json=params, stream=True, timeout=5)
             for chunk in response.iter_lines(decode_unicode=False, delimiter=b"\0"):
                 if chunk:
                     yield chunk + b"\0"
@@ -240,9 +239,7 @@ app = FastAPI()
 @app.post("/register_worker")
 async def register_worker(request: Request):
     data = await request.json()
-    controller.register_worker(
-        data["worker_name"], data["check_heart_beat"], data.get("worker_status", None)
-    )
+    controller.register_worker(data["worker_name"], data["check_heart_beat"], data.get("worker_status", None))
 
 
 @app.post("/refresh_all_workers")

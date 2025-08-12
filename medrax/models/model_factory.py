@@ -29,7 +29,7 @@ class ModelFactory:
             "base_url_key": "OPENAI_BASE_URL",
         },
         "gemini": {
-            "class": ChatGoogleGenerativeAI, 
+            "class": ChatGoogleGenerativeAI,
             "env_key": "GOOGLE_API_KEY",
             "base_url_key": "GOOGLE_BASE_URL",
         },
@@ -42,14 +42,12 @@ class ModelFactory:
         "grok": {
             "class": ChatXAI,
             "env_key": "XAI_API_KEY",
-        }
+        },
         # Add more providers with default configurations here
     }
 
     @classmethod
-    def register_provider(
-        cls, prefix: str, model_class: Type[BaseLanguageModel], env_key: str, **kwargs
-    ) -> None:
+    def register_provider(cls, prefix: str, model_class: Type[BaseLanguageModel], env_key: str, **kwargs) -> None:
         """Register a new model provider.
 
         Args:
@@ -61,9 +59,7 @@ class ModelFactory:
         cls._model_providers[prefix] = {"class": model_class, "env_key": env_key, **kwargs}
 
     @classmethod
-    def create_model(
-        cls, model_name: str, temperature: float = 0.7, **kwargs
-    ) -> BaseLanguageModel:
+    def create_model(cls, model_name: str, temperature: float = 0.7, **kwargs) -> BaseLanguageModel:
         """Create and return an instance of the appropriate language model.
 
         Args:
@@ -79,9 +75,7 @@ class ModelFactory:
             ValueError: If the required API key is missing
         """
         # Find the matching provider based on model name prefix
-        provider_prefix = next(
-            (prefix for prefix in cls._model_providers if model_name.startswith(prefix)), None
-        )
+        provider_prefix = next((prefix for prefix in cls._model_providers if model_name.startswith(prefix)), None)
 
         if not provider_prefix:
             raise ValueError(
@@ -122,6 +116,16 @@ class ModelFactory:
         if provider_prefix in ["openrouter"] and model_name.startswith(f"{provider_prefix}-"):
             actual_model_name = model_name[len(provider_prefix) + 1 :]
 
+        # Handle GPT-5 model
+        if model_name.startswith("gpt-5"):
+            return model_class(
+                model=actual_model_name,
+                temperature=temperature,
+                reasoning_effort="high",
+                **provider_kwargs,
+                **kwargs,
+            )
+
         # Create and return the model instance
         return model_class(
             model=actual_model_name,
@@ -138,7 +142,4 @@ class ModelFactory:
             Dict[str, Dict[str, Any]]: Dictionary of registered providers and their configurations
         """
         # Return a copy to prevent accidental modification
-        return {
-            k: {kk: vv for kk, vv in v.items() if kk != "class"}
-            for k, v in cls._model_providers.items()
-        }
+        return {k: {kk: vv for kk, vv in v.items() if kk != "class"} for k, v in cls._model_providers.items()}
