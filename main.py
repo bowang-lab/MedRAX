@@ -65,9 +65,6 @@ def initialize_agent(
     prompts = load_prompts_from_file(prompt_file)
     prompt = prompts[system_prompt]
 
-    # Define the URL of the MedGemma FastAPI service.
-    MEDGEMMA_API_URL = os.getenv("MEDGEMMA_API_URL", "http://172.17.8.141:8002")
-
     all_tools = {
         "TorchXRayVisionClassifierTool": lambda: TorchXRayVisionClassifierTool(device=device),
         "ArcPlusClassifierTool": lambda: ArcPlusClassifierTool(cache_dir=model_dir, device=device),
@@ -91,7 +88,7 @@ def initialize_agent(
         "MedSAM2Tool": lambda: MedSAM2Tool(
             device=device, cache_dir=model_dir, temp_dir=temp_dir
         ),
-        "MedGemmaVQATool": lambda: MedGemmaAPIClientTool(cache_dir=model_dir, device=device, api_url=MEDGEMMA_API_URL)
+        "MedGemmaVQATool": lambda: MedGemmaAPIClientTool(cache_dir=model_dir, device=device, api_url=os.getenv("MEDGEMMA_API_URL", "http://172.17.8.141:8002"))
     }    
 
     # Initialize only selected tools or all if none specified
@@ -211,7 +208,7 @@ if __name__ == "__main__":
         model_dir="/model-weights",
         temp_dir="temp2",  # Change this to the path of the temporary directory
         device="cuda:0",
-        model="gpt-4.1",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro, gpt-5
+        model="gpt-5",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro, gpt-5
         temperature=1.0,
         model_kwargs=model_kwargs,
         rag_config=rag_config,
