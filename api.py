@@ -15,12 +15,10 @@ The API supports:
 
 import uuid
 import base64
-import asyncio
-import tempfile
-import shutil
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Union
-from io import BytesIO
+from typing import List, Optional, Dict, Any
+import re
+import time
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -196,7 +194,6 @@ class MedRAXAPI:
         Returns:
             QueryResponse: The processed response
         """
-        import time
         start_time = time.time()
         
         # Generate thread ID if not provided
@@ -320,7 +317,6 @@ class MedRAXAPI:
                     for msg in node_output["messages"]:
                         if isinstance(msg, AIMessage) and msg.content:
                             # Clean up temp paths from response
-                            import re
                             clean_content = re.sub(r"temp[^\s]*", "", msg.content).strip()
                             if clean_content:
                                 yield {"type": "text", "content": clean_content}
