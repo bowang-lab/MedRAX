@@ -92,7 +92,7 @@ def initialize_agent(
             cache_dir=model_dir,
             device=device,
             load_in_8bit=True,
-            api_url=os.getenv("MEDGEMMA_API_URL", "http://172.17.8.141:8002")
+            api_url=os.getenv("MEDGEMMA_API_URL", "http://0.0.0.0:8002")
         )
     }
 
@@ -185,12 +185,12 @@ if __name__ == "__main__":
     ]
 
     # Share a single cache directory and device across tools
-    shared_model_dir = os.getenv("MODEL_WEIGHTS_DIR", "/model-weights")
-    shared_device = os.getenv("MEDRAX_DEVICE", "cuda:0")
+    model_dir = os.getenv("MODEL_WEIGHTS_DIR", "/model-weights")
+    device = os.getenv("MEDRAX_DEVICE", "cuda:0")
 
     # Setup the MedGemma environment if the MedGemmaVQATool is selected
     if "MedGemmaVQATool" in selected_tools:
-        setup_medgemma_env(cache_dir=shared_model_dir, device=shared_device)
+        setup_medgemma_env(cache_dir=model_dir, device=device)
 
     # Configure the Retrieval Augmented Generation (RAG) system
     # This allows the agent to access and use medical knowledge documents
@@ -214,10 +214,10 @@ if __name__ == "__main__":
     agent, tools_dict = initialize_agent(
         prompt_file="medrax/docs/system_prompts.txt",
         tools_to_use=selected_tools,
-        model_dir=shared_model_dir,
+        model_dir=model_dir,
         temp_dir="temp2",  # Change this to the path of the temporary directory
-        device=shared_device,
-        model="gpt-5",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro, gpt-5
+        device=device,
+        model="gpt-4.1",  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro, gpt-5
         temperature=1.0,
         model_kwargs=model_kwargs,
         rag_config=rag_config,
