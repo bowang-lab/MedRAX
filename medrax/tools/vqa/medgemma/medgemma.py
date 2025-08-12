@@ -290,6 +290,11 @@ app = FastAPI(
 medgemma_model: Optional[MedGemmaModel] = None
 inference_semaphore: Optional[asyncio.Semaphore] = None
 
+@app.get("/health")
+async def health():
+    """Health check endpoint."""
+    return {"status": "ok"}
+
 @app.on_event("startup")
 async def startup_event():
     """Load the MedGemma model at application startup.
@@ -448,7 +453,12 @@ async def analyze_images(
 if __name__ == "__main__":
     """Launch the MedGemma VQA API server.
     
-    Starts the FastAPI application with uvicorn server, binding to all
-    network interfaces on port 8002.
+    Reads MEDGEMMA_HOST and MEDGEMMA_PORT if provided; otherwise defaults
+    to 0.0.0.0:8002.
     """
-    uvicorn.run(app, host="0.0.0.0", port=8002)
+    host = os.getenv("MEDGEMMA_HOST", "0.0.0.0")
+    try:
+        port = int(os.getenv("MEDGEMMA_PORT", "8002"))
+    except ValueError:
+        port = 8002
+    uvicorn.run(app, host=host, port=port)

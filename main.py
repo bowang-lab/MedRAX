@@ -36,6 +36,37 @@ logging.set_verbosity_error()
 _ = load_dotenv()
 
 
+def resolve_medgemma_api_url_from_value(value: Optional[str]) -> str:
+    """Resolve the MedGemma API base URL using CLI value, env var, and SLURM-aware fallback.
+
+    Resolution order:
+    1) Explicit provided value (e.g., CLI flag)
+    2) MEDGEMMA_API_URL environment variable
+    3) If on SLURM, require explicit URL (raise)
+    4) Otherwise, default to localhost for single-box setups
+    """
+    if value:
+        return value
+
+    env_url = os.getenv("MEDGEMMA_API_URL")
+    if env_url:
+        return env_url
+
+    if os.getenv("SLURM_JOB_ID") or os.getenv("SLURM_NODEID"):
+        raise RuntimeError(
+            "MEDGEMMA_API_URL not set and --medgemma-api-url not provided. "
+            "On SLURM, the client usually runs on a different node, "
+            "so you must point to the server’s reachable IP, e.g. http://<node-ip>:8002"
+        )
+
+    return "http://127.0.0.1:8002"
+
+
+def resolve_medgemma_api_url(args) -> str:
+    """Helper that reads from an argparse Namespace if available."""
+    return resolve_medgemma_api_url_from_value(getattr(args, "medgemma_api_url", None))
+
+
 def initialize_agent(
     prompt_file: str,
     tools_to_use: Optional[List[str]] = None,
@@ -47,6 +78,7 @@ def initialize_agent(
     rag_config: Optional[RAGConfig] = None,
     model_kwargs: Dict[str, Any] = {},
     system_prompt: str = "MEDICAL_ASSISTANT",
+    medgemma_api_url: Optional[str] = None,
 ):
     """Initialize the MedRAX agent with specified tools and configuration.
 
@@ -93,7 +125,7 @@ def initialize_agent(
             cache_dir=model_dir,
             device=device,
             load_in_8bit=True,
-            api_url=os.getenv("MEDGEMMA_API_URL", "http://0.0.0.0:8002"),
+            api_url=resolve_medgemma_api_url_from_value(medgemma_api_url),
         ),
     }
 
@@ -295,6 +327,13 @@ def parse_arguments():
         + "PythonSandboxTool",
     )
 
+    # MedGemma API configuration
+    parser.add_argument(
+        "--medgemma-api-url",
+        default=None,
+        help="MedGemma API base URL, e.g. http://127.0.0.1:8002 or http://<node-ip>:8002"
+    )
+
     return parser.parse_args()
 
 
@@ -360,8 +399,22 @@ if __name__ == "__main__":
         print(f"✅ Authentication enabled for user: {auth_credentials[0]}")
 
     # Setup the MedGemma environment if the MedGemmaVQATool is selected
+    medgemma_base_url_from_setup: Optional[str] = None
+    medgemma_api_url_effective: Optional[str] = args.medgemma_api_url
     if "MedGemmaVQATool" in selected_tools:
-        setup_medgemma_env(cache_dir=model_dir, device=device)
+        # Launch server and capture its URL if no explicit URL/ENV provided
+        try:
+            if medgemma_api_url_effective is None and os.getenv("MEDGEMMA_API_URL") is None:
+                medgemma_base_url_from_setup = setup_medgemma_env(cache_dir=model_dir, device=device)
+                # If we auto-launched, use this URL unless overridden later
+                if medgemma_base_url_from_setup:
+                    medgemma_api_url_effective = medgemma_base_url_from_setup
+                    print(f"MedGemma API auto-launched at {medgemma_api_url_effective}")
+            else:
+                # Still ensure environment is set up; it will bind to provided host/port
+                setup_medgemma_env(cache_dir=model_dir, device=device)
+        except Exception as e:
+            print(f"Warning: Failed to launch MedGemma service automatically: {e}")
 
     # Configure the Retrieval Augmented Generation (RAG) system
     # This allows the agent to access and use medical knowledge documents
@@ -393,6 +446,7 @@ if __name__ == "__main__":
         model_kwargs=model_kwargs,
         rag_config=rag_config,
         system_prompt=args.system_prompt,
+        medgemma_api_url=medgemma_api_url_effective,
     )
 
     # Launch based on selected mode
