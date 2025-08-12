@@ -106,8 +106,6 @@ class MedSAM2Tool(BaseTool):
             config_path = model_cfg.replace('.yaml', '')
             sam2_model = build_sam2(config_path, str(self.cache_dir / model_file), device=device)
             self.predictor = SAM2ImagePredictor(sam2_model)
-            
-            print(f"MedSAM2 model loaded successfully on {device}")
 
         except Exception as e:
             raise RuntimeError(f"Failed to initialize MedSAM2: {str(e)}")
