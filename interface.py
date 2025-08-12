@@ -191,7 +191,6 @@ class ChatInterface:
                                 tool_name = pending_call["name"]
                                 tool_args = pending_call["args"]
 
-                                # First, display the tool usage card
                                 try:
                                     # Handle case where tool returns tuple (output, metadata)
                                     content = msg.content
@@ -201,9 +200,11 @@ class ChatInterface:
                                     tool_output_str = json.dumps(tool_output_json, indent=2)
                                 except (json.JSONDecodeError, TypeError):
                                     tool_output_str = str(msg.content)
-                                
+
                                 tool_args_str = json.dumps(tool_args, indent=2)
+
                                 description = f"**Input:**\n```json\n{tool_args_str}\n```\n\n**Output:**\n```json\n{tool_output_str}\n```"
+
                                 metadata = {
                                     "title": f"⚒️ Tool: {tool_name}",
                                     "description": description,
@@ -216,8 +217,8 @@ class ChatInterface:
                                         metadata=metadata,
                                     )
                                 )
+                                yield chat_history, self.display_file_path, ""
 
-                                # Special handling for image_visualizer
                                 if tool_name == "image_visualizer":
                                     try:
                                         # Handle case where tool returns tuple (output, metadata)
@@ -233,12 +234,9 @@ class ChatInterface:
                                                     content={"path": self.display_file_path},
                                                 )
                                             )
-                                    except Exception:
+                                            yield chat_history, self.display_file_path, ""
+                                    except (json.JSONDecodeError, TypeError):
                                         pass
-                                
-                                # Yield a single update for this tool event
-                                yield chat_history, self.display_file_path, ""
-
 
         except Exception as e:
             chat_history.append(
@@ -275,7 +273,7 @@ def create_demo(agent, tools_dict):
                 with gr.Column(scale=5):
                     chatbot = gr.Chatbot(
                         [],
-                        height=1200,
+                        height=1000,
                         container=True,
                         show_label=True,
                         elem_classes="chat-box",
@@ -308,18 +306,14 @@ def create_demo(agent, tools_dict):
                             file_types=["file"],
                         )
                     with gr.Row():
-                        clear_btn = gr.Button("Clear Chat")
-                        new_thread_btn = gr.Button("New Thread")
+                        new_chat_btn = gr.Button("New Chat")
 
         # Event handlers
-        def clear_chat():
+        def new_chat():
             interface.original_file_path = None
             interface.display_file_path = None
-            return [], None
-
-        def new_thread():
             interface.current_thread_id = str(time.time())
-            return [], interface.display_file_path
+            return [], None
 
         def handle_file_upload(file):
             return interface.handle_upload(file.name)
@@ -338,7 +332,6 @@ def create_demo(agent, tools_dict):
 
         dicom_upload.upload(handle_file_upload, inputs=dicom_upload, outputs=image_display)
 
-        clear_btn.click(clear_chat, outputs=[chatbot, image_display])
-        new_thread_btn.click(new_thread, outputs=[chatbot, image_display])
+        new_chat_btn.click(new_chat, outputs=[chatbot, image_display])
 
     return demo
