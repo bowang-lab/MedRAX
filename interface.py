@@ -29,7 +29,7 @@ class ChatInterface:
         """
         self.agent = agent
         self.tools_dict = tools_dict
-        self.upload_dir = Path("temp")
+        self.upload_dir = Path(f"temp/{time.time()}")
         self.upload_dir.mkdir(exist_ok=True)
         self.current_thread_id = None
         # Separate storage for original and display paths
@@ -191,20 +191,18 @@ class ChatInterface:
                                 tool_name = pending_call["name"]
                                 tool_args = pending_call["args"]
 
+                                # Parse content
                                 try:
-                                    # Handle case where tool returns tuple (output, metadata)
-                                    content = msg.content
-                                    content_tuple = ast.literal_eval(content)
-                                    content = json.dumps(content_tuple[0])
-                                    tool_output_json = json.loads(content)
-                                    tool_output_str = json.dumps(tool_output_json, indent=2)
-                                except (json.JSONDecodeError, TypeError):
+                                    content_tuple = eval(msg.content)
+                                    result = content_tuple[0]
+                                    tool_output_str = json.dumps(result, indent=2)
+                                except (json.JSONDecodeError, TypeError, ValueError):
+                                    result = msg.content
                                     tool_output_str = str(msg.content)
-
+                                
+                                # Display tool usage card
                                 tool_args_str = json.dumps(tool_args, indent=2)
-
                                 description = f"**Input:**\n```json\n{tool_args_str}\n```\n\n**Output:**\n```json\n{tool_output_str}\n```"
-
                                 metadata = {
                                     "title": f"⚒️ Tool: {tool_name}",
                                     "description": description,
@@ -217,26 +215,20 @@ class ChatInterface:
                                         metadata=metadata,
                                     )
                                 )
+
+                                # Special handling for image_visualizer
+                                if tool_name == "image_visualizer" and isinstance(result, dict) and "image_path" in result:
+                                    self.display_file_path = result["image_path"]
+                                    chat_history.append(
+                                        ChatMessage(
+                                            role="assistant",
+                                            content={"path": self.display_file_path},
+                                        )
+                                    )
+                                
+                                # Yield a single update for this tool event
                                 yield chat_history, self.display_file_path, ""
 
-                                if tool_name == "image_visualizer":
-                                    try:
-                                        # Handle case where tool returns tuple (output, metadata)
-                                        content = msg.content
-                                        content_tuple = ast.literal_eval(content)
-                                        result = content_tuple[0]
-                                        
-                                        if isinstance(result, dict) and "image_path" in result:
-                                            self.display_file_path = result["image_path"]
-                                            chat_history.append(
-                                                ChatMessage(
-                                                    role="assistant",
-                                                    content={"path": self.display_file_path},
-                                                )
-                                            )
-                                            yield chat_history, self.display_file_path, ""
-                                    except (json.JSONDecodeError, TypeError):
-                                        pass
 
         except Exception as e:
             chat_history.append(
