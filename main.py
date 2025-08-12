@@ -135,7 +135,8 @@ def initialize_agent(
     return agent, tools_dict
 
 
-def run_gradio_interface(agent, tools_dict, host="0.0.0.0", port=8686):
+def run_gradio_interface(agent, tools_dict, host="0.0.0.0", port=8686, 
+                        auth=None, share=False):
     """
     Run the Gradio web interface.
 
@@ -144,10 +145,32 @@ def run_gradio_interface(agent, tools_dict, host="0.0.0.0", port=8686):
         tools_dict: Dictionary of available tools
         host (str): Host to bind the server to
         port (int): Port to run the server on
+        auth: Authentication credentials (tuple)
+        share (bool): Whether to create a shareable public link
     """
     print(f"Starting Gradio interface on {host}:{port}")
+    
+    if auth:
+        print(f"🔐 Authentication enabled for user: {auth[0]}")
+    else:
+        print("⚠️  Running without authentication (public access)")
+    
+    if share:
+        print("🌍 Creating shareable public link (expires in 1 week)...")
+    
     demo = create_demo(agent, tools_dict)
-    demo.launch(server_name=host, server_port=port, share=True)
+    
+    # Prepare launch parameters
+    launch_kwargs = {
+        "server_name": host,
+        "server_port": port,
+        "share": share
+    }
+    
+    if auth:
+        launch_kwargs["auth"] = auth
+        
+    demo.launch(**launch_kwargs)
 
 
 def run_api_server(agent, tools_dict, host="0.0.0.0", port=8585, public=False):
@@ -194,15 +217,26 @@ def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="MedRAX - Medical Reasoning Agent for Chest X-ray")
 
-    # Server configuration
+    # Run mode
     parser.add_argument(
         "--mode",
         choices=["gradio", "api", "both"],
         default="gradio",
         help="Run mode: 'gradio' for web interface, 'api' for REST API, 'both' for both services",
     )
+    
+    # Gradio interface options
     parser.add_argument("--gradio-host", default="0.0.0.0", help="Gradio host address")
     parser.add_argument("--gradio-port", type=int, default=8686, help="Gradio port")
+    parser.add_argument("--auth", nargs=2, metavar=("USERNAME", "PASSWORD"), 
+                       default=["admin", "adibjun"],
+                       help="Enable password authentication (default: admin adibjun)")
+    parser.add_argument("--no-auth", action="store_true", 
+                       help="Disable authentication (public access)")
+    parser.add_argument("--share", action="store_true", 
+                       help="Create a temporary shareable link (expires in 1 week)")
+    
+    # API server options
     parser.add_argument("--api-host", default="0.0.0.0", help="API host address")
     parser.add_argument("--api-port", type=int, default=8000, help="API port")
     parser.add_argument("--public", action="store_true", help="Make API publicly accessible via ngrok tunnel")
@@ -316,6 +350,14 @@ if __name__ == "__main__":
     print(f"Using model: {args.model}")
     print(f"Selected tools: {selected_tools}")
     print(f"Using system prompt: {args.system_prompt}")
+    
+    # Set up authentication (simplified with argparse defaults)
+    if args.no_auth:
+        auth_credentials = None
+        print("⚠️  Authentication disabled (public access)")
+    else:
+        auth_credentials = tuple(args.auth)  # Uses default ["admin", "adibjun"] if not specified
+        print(f"✅ Authentication enabled for user: {auth_credentials[0]}")
 
     # Setup the MedGemma environment if the MedGemmaVQATool is selected
     if "MedGemmaVQATool" in selected_tools:
@@ -355,7 +397,13 @@ if __name__ == "__main__":
 
     # Launch based on selected mode
     if args.mode == "gradio":
-        run_gradio_interface(agent, tools_dict, args.gradio_host, args.gradio_port)
+        run_gradio_interface(
+            agent, tools_dict, 
+            host=args.gradio_host, 
+            port=args.gradio_port,
+            auth=auth_credentials,
+            share=args.share
+        )
 
     elif args.mode == "api":
         run_api_server(agent, tools_dict, args.api_host, args.api_port, args.public)
@@ -363,10 +411,17 @@ if __name__ == "__main__":
     elif args.mode == "both":
         # Run both services in separate threads
         api_thread = threading.Thread(
-            target=run_api_server, args=(agent, tools_dict, args.api_host, args.api_port, args.public)
+            target=run_api_server, 
+            args=(agent, tools_dict, args.api_host, args.api_port, args.public)
         )
         api_thread.daemon = True
         api_thread.start()
 
-        # Run Gradio in main thread
-        run_gradio_interface(agent, tools_dict, args.gradio_host, args.gradio_port)
+        # Run Gradio in main thread with authentication and sharing
+        run_gradio_interface(
+            agent, tools_dict, 
+            host=args.gradio_host, 
+            port=args.gradio_port,
+            auth=auth_credentials,
+            share=args.share
+        )
