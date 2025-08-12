@@ -193,12 +193,17 @@ class ChatInterface:
 
                                 # Parse content
                                 try:
+                                    # Try eval first for Python tuples
                                     content_tuple = eval(msg.content)
                                     result = content_tuple[0]
                                     tool_output_str = json.dumps(result, indent=2)
-                                except (json.JSONDecodeError, TypeError, ValueError):
-                                    result = msg.content
-                                    tool_output_str = str(msg.content)
+                                except (ValueError, NameError):
+                                    try:
+                                        result = json.loads(msg.content)
+                                        tool_output_str = json.dumps(result, indent=2)
+                                    except json.JSONDecodeError:
+                                        result = msg.content
+                                        tool_output_str = str(msg.content)
                                 
                                 # Display tool usage card
                                 tool_args_str = json.dumps(tool_args, indent=2)
@@ -217,14 +222,24 @@ class ChatInterface:
                                 )
 
                                 # Special handling for image_visualizer
-                                if tool_name == "image_visualizer" and isinstance(result, dict) and "image_path" in result:
-                                    self.display_file_path = result["image_path"]
-                                    chat_history.append(
-                                        ChatMessage(
-                                            role="assistant",
-                                            content={"path": self.display_file_path},
+                                if tool_name == "image_visualizer":
+                                    image_path = None
+                                    try:
+                                        image_path = result["image_path"]
+                                    except (TypeError, KeyError):
+                                        try:
+                                            image_path = result[0]["image_path"]
+                                        except (TypeError, KeyError, IndexError):
+                                            pass
+                                    
+                                    if image_path:
+                                        self.display_file_path = image_path
+                                        chat_history.append(
+                                            ChatMessage(
+                                                role="assistant",
+                                                content={"path": self.display_file_path},
+                                            )
                                         )
-                                    )
                                 
                                 # Yield a single update for this tool event
                                 yield chat_history, self.display_file_path, ""
