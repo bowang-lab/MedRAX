@@ -10,6 +10,9 @@ from langchain_openai import ChatOpenAI
 from interface import create_demo
 from medrax.agent import *
 from medrax.tools import *
+from medrax.tools.blood_test_analyzer import BloodTestAnalyzerTool # Added import
+from medrax.tools.imaging_series_tool import MedicalImagingSeriesTool # Added import
+from medrax.tools.ophthalmic_imaging_tool import OphthalmicImagingTool # Added import
 from medrax.utils import *
 
 warnings.filterwarnings("ignore")
@@ -63,6 +66,9 @@ def initialize_agent(
         ),
         "ImageVisualizerTool": lambda: ImageVisualizerTool(),
         "DicomProcessorTool": lambda: DicomProcessorTool(temp_dir=temp_dir),
+        "BloodTestAnalyzerTool": lambda: BloodTestAnalyzerTool(temp_dir=temp_dir, device=device), # Added tool
+        "MedicalImagingSeriesTool": lambda: MedicalImagingSeriesTool(temp_dir=temp_dir), # Added new series tool
+        "OphthalmicImagingTool": lambda: OphthalmicImagingTool(temp_dir=temp_dir), # Added ophthalmic tool
     }
 
     # Initialize only selected tools or all if none specified
@@ -103,6 +109,9 @@ if __name__ == "__main__":
         "ChestXRaySegmentationTool",
         "ChestXRayReportGeneratorTool",
         "XRayVQATool",
+        "BloodTestAnalyzerTool", # Added tool to selected list
+        "MedicalImagingSeriesTool", # Added new series tool to selected list
+        "OphthalmicImagingTool", # Added ophthalmic tool
         # "LlavaMedTool",
         # "XRayPhraseGroundingTool",
         # "ChestXRayGeneratorTool",
