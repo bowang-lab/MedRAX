@@ -29,7 +29,9 @@ class ChestXRayClassifierTool(BaseTool):
 
     Atelectasis, Cardiomegaly, Consolidation, Edema, Effusion, Emphysema,
     Enlarged Cardiomediastinum, Fibrosis, Fracture, Hernia, Infiltration,
-    Lung Lesion, Lung Opacity, Mass, Nodule, Pleural Thickening, Pneumonia, Pneumothorax
+    Lung Lesion, Lung Opacity, Mass, Nodule, Pleural Thickening, Pneumonia, Pneumothorax.
+    Additional pathologies may be listed but are currently STUBBED (will return 0.0 or NaN) pending model update:
+    Tuberculosis, Pulmonary Fibrosis, ILD (Interstitial Lung Disease), Scoliosis.
 
     The output values represent the probability (from 0 to 1) of each condition being present in the image.
     A higher value indicates a higher likelihood of the condition being present.
@@ -37,16 +39,18 @@ class ChestXRayClassifierTool(BaseTool):
 
     name: str = "chest_xray_classifier"
     description: str = (
-        "A tool that analyzes chest X-ray images and classifies them for 18 different pathologies. "
+        "A tool that analyzes chest X-ray images and classifies them for multiple pathologies. "
         "Input should be the path to a chest X-ray image file. "
         "Output is a dictionary of pathologies and their predicted probabilities (0 to 1). "
-        "Pathologies include: Atelectasis, Cardiomegaly, Consolidation, Edema, Effusion, Emphysema, "
+        "Core pathologies (18) include: Atelectasis, Cardiomegaly, Consolidation, Edema, Effusion, Emphysema, "
         "Enlarged Cardiomediastinum, Fibrosis, Fracture, Hernia, Infiltration, Lung Lesion, "
         "Lung Opacity, Mass, Nodule, Pleural Thickening, Pneumonia, and Pneumothorax. "
+        "Additional pathologies like Tuberculosis, Pulmonary Fibrosis, ILD, Scoliosis are listed but are currently STUBBED (return 0.0/NaN) and require model update for actual prediction. "
         "Higher values indicate a higher likelihood of the condition being present."
     )
     args_schema: Type[BaseModel] = ChestXRayInput
     model: xrv.models.DenseNet = None
+    extended_pathologies: list = None
     device: Optional[str] = "cuda"
     transform: torchvision.transforms.Compose = None
 
@@ -57,6 +61,26 @@ class ChestXRayClassifierTool(BaseTool):
         self.device = torch.device(device) if device else "cuda"
         self.model = self.model.to(self.device)
         self.transform = torchvision.transforms.Compose([xrv.datasets.XRayCenterCrop()])
+
+        # Define the full list of pathologies this tool will report on
+        # The core 18 are from xrv.datasets.default_pathologies
+        self.core_pathologies = sorted(list(xrv.datasets.default_pathologies)) # Ensure consistent order
+        self.new_stubbed_pathologies = sorted([
+            "Tuberculosis",
+            "Pulmonary Fibrosis", # More specific than generic Fibrosis
+            "ILD", # Interstitial Lung Disease
+            "Scoliosis",
+            # Potentially add others here like:
+            # "Pneumoperitoneum",
+            # "Subcutaneous Emphysema",
+            # "Bronchiectasis",
+            # "Hilar Enlargement"
+        ])
+        # Ensure no overlap with core_pathologies if some were to be promoted
+        self.new_stubbed_pathologies = [p for p in self.new_stubbed_pathologies if p not in self.core_pathologies]
+
+        self.extended_pathologies = self.core_pathologies + self.new_stubbed_pathologies
+
 
     def _process_image(self, image_path: str) -> torch.Tensor:
         """
@@ -114,12 +138,37 @@ class ChestXRayClassifierTool(BaseTool):
             with torch.inference_mode():
                 preds = self.model(img).cpu()[0]
 
-            output = dict(zip(xrv.datasets.default_pathologies, preds.numpy()))
+            # Initialize output with predictions from the core model
+            # Ensure self.model.pathologies aligns with how preds are ordered if not default_pathologies
+            # For densenet121-res224-all, self.model.pathologies is xrv.datasets.default_pathologies
+            output = dict(zip(self.model.pathologies, preds.numpy()))
+
+            # Add stubbed pathologies with a default value (e.g., 0.0 or np.nan)
+            # np.nan might be better to indicate "not available" or "not predicted"
+            stub_value = 0.0 # Or np.nan, but ensure consistent float output if specified in return type hint
+            for pathology in self.new_stubbed_pathologies:
+                if pathology not in output: # Should always be true given current logic
+                    output[pathology] = stub_value
+
+            # Ensure the final output dictionary has keys in the order of self.extended_pathologies
+            # This is mostly for consistent presentation if someone iterates over output.items()
+            # However, standard dicts are unordered in older Python, though ordered by insertion in 3.7+
+            # For safety, could reconstruct, but dict(zip()) from model is usually sufficient.
+            # final_ordered_output = {pathology: output.get(pathology, stub_value) for pathology in self.extended_pathologies}
+
+
             metadata = {
                 "image_path": image_path,
                 "analysis_status": "completed",
-                "note": "Probabilities range from 0 to 1, with higher values indicating higher likelihood of the condition.",
+                "note": (
+                    "Probabilities range from 0 to 1. Higher values indicate higher likelihood. "
+                    "Pathologies marked as STUBBED (e.g., Tuberculosis, Pulmonary Fibrosis, ILD, Scoliosis) "
+                    "currently return a default value (0.0) and require model update for actual prediction."
+                ),
+                "predicted_pathologies": self.core_pathologies,
+                "stubbed_pathologies": self.new_stubbed_pathologies,
             }
+            # Return the output dictionary which now includes both predicted and stubbed values
             return output, metadata
         except Exception as e:
             return {"error": str(e)}, {
