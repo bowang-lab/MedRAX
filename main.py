@@ -63,6 +63,7 @@ def initialize_agent(
         ),
         "ImageVisualizerTool": lambda: ImageVisualizerTool(),
         "DicomProcessorTool": lambda: DicomProcessorTool(temp_dir=temp_dir),
+        "AssistantDoctorTool": lambda: AssistantDoctorTool(),
     }
 
     # Initialize only selected tools or all if none specified
@@ -103,6 +104,7 @@ if __name__ == "__main__":
         "ChestXRaySegmentationTool",
         "ChestXRayReportGeneratorTool",
         "XRayVQATool",
+        "AssistantDoctorTool", # Added AssistantDoctorTool
         # "LlavaMedTool",
         # "XRayPhraseGroundingTool",
         # "ChestXRayGeneratorTool",
