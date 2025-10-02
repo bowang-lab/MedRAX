@@ -172,3 +172,75 @@ logs/
 temp/
 
 .gradio/
+
+# UV package manager
+uv.lock
+
+# Machine Learning / AI specific
+*.pkl
+*.pickle
+*.h5
+*.hdf5
+*.ckpt
+*.pth
+*.pt
+*.safetensors
+models/
+checkpoints/
+wandb/
+tensorboard_logs/
+*.onnx
+
+# Jupyter notebook outputs
+*.ipynb
+.ipynb_checkpoints/
+
+# Data files (large datasets)
+*.csv
+*.json
+*.parquet
+*.feather
+*.arrow
+data/raw/
+data/processed/
+datasets/
+
+# Medical imaging specific
+*.dcm
+*.dicom
+*.nii
+*.nii.gz
+*.nrrd
+*.mha
+*.mhd
+*.raw
+
+# Web platform specific
+web_platform/frontend/.next/
+web_platform/frontend/node_modules/
+web_platform/frontend/.env*
+web_platform/backend/temp/
+web_platform/backend/__pycache__/
+web_platform/backend/.env*
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup

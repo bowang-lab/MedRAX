@@ -1,0 +1,66 @@
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# Model outputs and checkpoints
+models/
+checkpoints/
+outputs/
+results/
+
+# Data files
+data/
+*.csv
+*.json
+*.pkl
+*.pickle
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.bak
+*.backup
+
+# Experiment tracking
+wandb/
+tensorboard_logs/
+mlruns/
+
+# Large files that shouldn't be tracked
+*.h5
+*.hdf5
+*.ckpt
+*.pth
+*.pt
+*.safetensors
+*.onnx
+
+
+

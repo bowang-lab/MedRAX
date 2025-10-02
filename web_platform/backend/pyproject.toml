@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "medrax-web-backend"
+version = "0.1.0"
+description = "Web backend for MedRAX medical reasoning agents"
+authors = [
+    {name = "MedRAX Team"},
+]
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi==0.104.1",
+    "uvicorn[standard]==0.24.0",
+    "python-multipart==0.0.6",
+    "python-dotenv==1.0.0",
+    "pydantic==2.5.0",
+    "pandas==2.1.0",
+    # MedRAX dependencies (installed separately)
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "httpx",  # for testing
+    "black",
+    "isort",
+]
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+
+
+

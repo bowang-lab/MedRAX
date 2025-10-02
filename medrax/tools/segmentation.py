@@ -229,10 +229,15 @@ class ChestXRaySegmentationTool(BaseTool):
         run_manager: Optional[CallbackManagerForToolRun] = None,
     ) -> Tuple[Dict[str, Any], Dict]:
         """Run segmentation analysis for specified organs."""
+        import time
+        print(f"[ChestXRaySegmentation] 🫁 Starting anatomical segmentation...")
+        start_time = time.time()
+        
         try:
             # Validate and get organ indices
             if organs:
                 organs = [o.strip() for o in organs]
+                print(f"[ChestXRaySegmentation] 🎯 Target organs: {', '.join(organs)}")
                 invalid_organs = [o for o in organs if o not in self.organ_map]
                 if invalid_organs:
                     raise ValueError(f"Invalid organs specified: {invalid_organs}")
@@ -240,11 +245,14 @@ class ChestXRaySegmentationTool(BaseTool):
             else:
                 organ_indices = list(self.organ_map.values())
                 organs = list(self.organ_map.keys())
+                print(f"[ChestXRaySegmentation] 🎯 Segmenting all {len(organs)} organs")
 
             # Load and process image
+            print(f"[ChestXRaySegmentation] 📂 Loading image: {image_path}")
             original_img = skimage.io.imread(image_path)
             if len(original_img.shape) > 2:
                 original_img = original_img[:, :, 0]
+            print(f"[ChestXRaySegmentation] ✅ Image loaded - Shape: {original_img.shape}")
 
             img = xrv.datasets.normalize(original_img, 255)
             img = img[None, ...]
@@ -253,15 +261,22 @@ class ChestXRaySegmentationTool(BaseTool):
             img = img.to(self.device)
 
             # Generate predictions
+            print(f"[ChestXRaySegmentation] 🧠 Running PSPNet inference on {self.device}...")
             with torch.no_grad():
                 pred = self.model(img)
             pred_probs = torch.sigmoid(pred)
             pred_masks = (pred_probs > 0.5).float()
+            
+            seg_time = time.time() - start_time
+            print(f"[ChestXRaySegmentation] ⚡ Segmentation completed in {seg_time:.2f}s")
 
             # Save visualization
+            print(f"[ChestXRaySegmentation] 🎨 Generating visualization...")
             viz_path = self._save_visualization(original_img, pred_masks, organ_indices)
+            print(f"[ChestXRaySegmentation] 💾 Saved visualization: {viz_path}")
 
             # Compute metrics for selected organs
+            print(f"[ChestXRaySegmentation] 📏 Computing metrics...")
             results = {}
             for idx, organ_name in zip(organ_indices, organs):
                 mask = pred_masks[0, idx].cpu().numpy()
@@ -271,6 +286,10 @@ class ChestXRaySegmentationTool(BaseTool):
                     )
                     if metrics:
                         results[organ_name] = metrics
+                        print(f"   • {organ_name}: {metrics.area_cm2:.2f} cm² (confidence: {metrics.confidence_score:.3f})")
+
+            elapsed = time.time() - start_time
+            print(f"[ChestXRaySegmentation] ✅ Segmentation completed - Found {len(results)} organs in {elapsed:.2f}s")
 
             output = {
                 "segmentation_image_path": viz_path,
@@ -285,16 +304,22 @@ class ChestXRaySegmentationTool(BaseTool):
                 "pixel_spacing_mm": self.pixel_spacing_mm,
                 "requested_organs": organs,
                 "processed_organs": list(results.keys()),
+                "total_time_seconds": elapsed,
+                "device": str(self.device),
+                "model": "PSPNet",
                 "analysis_status": "completed",
             }
 
             return output, metadata
 
         except Exception as e:
+            elapsed = time.time() - start_time
+            print(f"[ChestXRaySegmentation] ❌ Error after {elapsed:.2f}s: {str(e)}")
             error_output = {"error": str(e)}
             error_metadata = {
                 "image_path": image_path,
                 "analysis_status": "failed",
+                "error_time_seconds": elapsed,
                 "error_traceback": traceback.format_exc(),
             }
             return error_output, error_metadata

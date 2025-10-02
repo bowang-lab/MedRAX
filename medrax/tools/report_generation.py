@@ -168,23 +168,41 @@ class ChestXRayReportGeneratorTool(BaseTool):
         Returns:
             Tuple[str, Dict]: A tuple containing the complete report and metadata.
         """
+        import time
+        print(f"[ChestXRayReportGenerator] 📝 Starting report generation...")
+        start_time = time.time()
+        
         try:
             # Process image for both models
+            print(f"[ChestXRayReportGenerator] 📂 Loading image: {image_path}")
             findings_pixels = self._process_image(
                 image_path, self.findings_processor, self.findings_model
             )
             impression_pixels = self._process_image(
                 image_path, self.impression_processor, self.impression_model
             )
+            print(f"[ChestXRayReportGenerator] ✅ Image processed for both models")
 
             # Generate both sections
+            print(f"[ChestXRayReportGenerator] 🧠 Generating findings section (ViT-BERT)...")
+            findings_start = time.time()
             with torch.inference_mode():
                 findings_text = self._generate_report_section(
                     findings_pixels, self.findings_model, self.findings_tokenizer
                 )
+            findings_time = time.time() - findings_start
+            print(f"[ChestXRayReportGenerator] ✅ Findings generated in {findings_time:.2f}s")
+            print(f"   📄 Findings: {findings_text[:100]}...")
+            
+            print(f"[ChestXRayReportGenerator] 🧠 Generating impression section (ViT-BERT)...")
+            impression_start = time.time()
+            with torch.inference_mode():
                 impression_text = self._generate_report_section(
                     impression_pixels, self.impression_model, self.impression_tokenizer
                 )
+            impression_time = time.time() - impression_start
+            print(f"[ChestXRayReportGenerator] ✅ Impression generated in {impression_time:.2f}s")
+            print(f"   📄 Impression: {impression_text[:100]}...")
 
             # Combine into formatted report
             report = (
@@ -193,19 +211,30 @@ class ChestXRayReportGeneratorTool(BaseTool):
                 f"IMPRESSION:\n{impression_text}"
             )
 
+            elapsed = time.time() - start_time
+            print(f"[ChestXRayReportGenerator] ✅ Complete report generated in {elapsed:.2f}s")
+
             metadata = {
                 "image_path": image_path,
                 "analysis_status": "completed",
                 "sections_generated": ["findings", "impression"],
+                "total_time_seconds": elapsed,
+                "findings_time_seconds": findings_time,
+                "impression_time_seconds": impression_time,
+                "device": str(self.device),
+                "model": "ViT-BERT (CheXpert + MIMIC-CXR)"
             }
 
             return report, metadata
 
         except Exception as e:
+            elapsed = time.time() - start_time
+            print(f"[ChestXRayReportGenerator] ❌ Error after {elapsed:.2f}s: {str(e)}")
             return f"Error generating report: {str(e)}", {
                 "image_path": image_path,
                 "analysis_status": "failed",
                 "error": str(e),
+                "error_time_seconds": elapsed
             }
 
     async def _arun(
