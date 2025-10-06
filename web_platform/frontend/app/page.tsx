@@ -1,14 +1,32 @@
 'use client';
 
+/**
+ * NOTE: Zustand store is available in lib/store.ts for state management
+ * To migrate state, replace useState with useAppStore, e.g.:
+ * 
+ * Before: const [sessionId, setSessionId] = useState(null);
+ * After:  const { sessionId, setSessionId } = useAppStore();
+ * 
+ * This provides better state management, persistence, and performance.
+ */
+
 import { useState, useRef, useEffect } from 'react';
-import { Bot, Loader2, X, Terminal, ChevronDown, ChevronUp } from 'lucide-react';
+import { Bot, Loader2, Terminal, ChevronDown, ChevronUp } from 'lucide-react';
 import axios from 'axios';
+import { useAppStore } from '../lib/store';
+import Header from '../components/Header';
+import PatientInfoForm from '../components/PatientInfoForm';
 import PatientSidebar from '../components/PatientSidebar';
+import ChatPanel from '../components/ChatPanel';
 import ClassificationResults from '../components/ClassificationResults';
 import SegmentationResults from '../components/SegmentationResults';
 import ReportResults from '../components/ReportResults';
+import GroundingResults from '../components/GroundingResults';
+import VQAResults from '../components/VQAResults';
+import ImageModal from '../components/ImageModal';
 import ImageUploadZone from '../components/ImageUploadZone';
 import AnalysisProgress from '../components/AnalysisProgress';
+import PipelineVisualization from '../components/PipelineVisualization';
 import { getAllSessions, saveSession, getSession, SessionData } from '../lib/sessionStorage';
 
 const API_BASE = 'http://localhost:8000';
@@ -54,8 +72,12 @@ export default function MedRAXPlatform() {
     const [showLogs, setShowLogs] = useState(false);
     const [backendLogs, setBackendLogs] = useState<string[]>([]);
 
+    // UI state
+    const [rightSidebarMode, setRightSidebarMode] = useState<'chat' | 'tools'>('chat');
+    const [pipelineSteps, setPipelineSteps] = useState<any[]>([]);
+    const [modalImage, setModalImage] = useState<{ src: string, alt: string } | null>(null);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const currentImage = uploadedImages[currentImageIndex] || null;
 
@@ -64,11 +86,6 @@ export default function MedRAXPlatform() {
         setSessionHistory(getAllSessions());
         createSession();
     }, []);
-
-    // Auto-scroll messages
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
 
     // Save session to history when there are changes
     useEffect(() => {
@@ -99,6 +116,47 @@ export default function MedRAXPlatform() {
         } catch (error: any) {
             console.error('Failed to create session:', error);
             return null;
+        }
+    };
+
+    const clearChat = async () => {
+        if (!sessionId) return;
+
+        try {
+            await axios.post(`${API_BASE}/api/sessions/${sessionId}/clear`);
+            setMessages([]);
+            setUploadedImages([]);
+            setCurrentImageIndex(0);
+            setAnalysisResults([]);
+            console.log('✅ Chat cleared');
+
+            // Add system message
+            setMessages([{
+                role: 'system',
+                content: '🧹 Chat cleared. Session preserved. Upload new images to continue.',
+                timestamp: new Date()
+            }]);
+        } catch (error: any) {
+            console.error('Failed to clear chat:', error);
+        }
+    };
+
+    const newThread = async () => {
+        if (!sessionId) return;
+
+        try {
+            const response = await axios.post(`${API_BASE}/api/sessions/${sessionId}/new-thread`);
+            setMessages([]);
+            console.log('✅ New conversation thread started:', response.data.thread_id);
+
+            // Add system message
+            setMessages([{
+                role: 'system',
+                content: '🔄 New conversation started. Previous context cleared.',
+                timestamp: new Date()
+            }]);
+        } catch (error: any) {
+            console.error('Failed to start new thread:', error);
         }
     };
 
@@ -204,93 +262,112 @@ export default function MedRAXPlatform() {
         setBackendLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Starting analysis...`]);
 
         try {
-            // Use fetch for streaming instead of axios
-            const response = await fetch(`${API_BASE}/api/chat/${sessionId}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    message: "Please perform a comprehensive analysis of this chest X-ray. Classify pathologies, segment anatomical structures, and provide your findings.",
-                    image_path: currentImage
-                })
-            });
+            // Use EventSource for Server-Sent Events streaming
+            const eventSource = new EventSource(
+                `${API_BASE}/api/chat/${sessionId}/stream?image_path=${encodeURIComponent(currentImage)}`
+            );
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
+            eventSource.addEventListener('status', (event) => {
+                const data = JSON.parse(event.data);
 
-            const data = await response.json();
-            const responseText = data.response;
-
-            // Parse response into tool messages and assistant messages
-            const lines = responseText.split('\n\n');
-            let currentMessage = '';
-            let currentRole: 'system' | 'assistant' = 'assistant';
-
-            for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed) continue;
-
-                if (trimmed.startsWith('🔧')) {
-                    // Flush previous message if any
-                    if (currentMessage) {
-                        setMessages(prev => [...prev, {
-                            role: currentRole,
-                            content: currentMessage,
-                            timestamp: new Date()
-                        }]);
-                        currentMessage = '';
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                    }
-
-                    // Add tool message
-                    setMessages(prev => [...prev, {
-                        role: 'system',
-                        content: trimmed,
-                        timestamp: new Date()
-                    }]);
-                    setBackendLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${trimmed}`]);
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                } else {
-                    // Accumulate assistant message
-                    if (currentMessage) {
-                        currentMessage += '\n\n' + trimmed;
-                    } else {
-                        currentMessage = trimmed;
-                        currentRole = 'assistant';
-                    }
-                }
-            }
-
-            // Flush final message
-            if (currentMessage) {
+                // Add message to chat
                 setMessages(prev => [...prev, {
-                    role: currentRole,
-                    content: currentMessage,
+                    role: 'system',
+                    content: data.message,
                     timestamp: new Date()
                 }]);
-            }
 
-            // Fetch analysis results
-            const resultsResponse = await axios.get(`${API_BASE}/api/analysis/${sessionId}`);
-            setAnalysisResults(Object.entries(resultsResponse.data.results || {}));
+                // Add to logs
+                setBackendLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${data.message}`]);
 
-            setMessages(prev => [...prev, {
-                role: 'system',
-                content: '✅ Analysis complete! Results displayed above.',
-                timestamp: new Date()
-            }]);
+                // Close connection when done
+                if (data.type === 'done' || data.type === 'error') {
+                    eventSource.close();
 
-            setBackendLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✅ Analysis complete`]);
+                    // Fetch final results
+                    axios.get(`${API_BASE}/api/analysis/${sessionId}`)
+                        .then(resultsResponse => {
+                            console.log('✅ Analysis results received:', resultsResponse.data);
+                            const results = resultsResponse.data.results || {};
+                            console.log('📊 Results count:', Object.keys(results).length);
+                            console.log('🔧 Tool names:', Object.keys(results));
+
+                            setAnalysisResults(Object.entries(results));
+
+                            // Format and add summary message to chat
+                            let summaryMessage = '### 📊 Analysis Complete\n\n';
+
+                            // Add classification results
+                            if (results.chest_xray_classifier) {
+                                const classData = results.chest_xray_classifier.result;
+                                if (classData && typeof classData === 'object') {
+                                    summaryMessage += '#### 🔬 Pathology Classification\n';
+                                    const predictions = classData.predictions || classData;
+                                    const topFindings = Object.entries(predictions)
+                                        .sort((a: any, b: any) => b[1] - a[1])
+                                        .slice(0, 5);
+                                    topFindings.forEach(([name, score]: any) => {
+                                        summaryMessage += `- **${name}:** ${(score * 100).toFixed(1)}%\n`;
+                                    });
+                                    summaryMessage += '\n';
+                                }
+                            }
+
+                            // Add segmentation summary
+                            if (results.chest_xray_segmentation) {
+                                const segData = results.chest_xray_segmentation.result;
+                                if (segData && typeof segData === 'object' && segData.organs) {
+                                    summaryMessage += '#### 🫁 Anatomical Segmentation\n';
+                                    summaryMessage += `Found ${Object.keys(segData.organs).length} anatomical structures\n\n`;
+                                }
+                            }
+
+                            // Add report
+                            if (results.chest_xray_report_generator) {
+                                const report = results.chest_xray_report_generator.result;
+                                if (typeof report === 'string') {
+                                    summaryMessage += '#### 📝 Radiology Report\n\n';
+                                    summaryMessage += report + '\n\n';
+                                }
+                            }
+
+                            summaryMessage += '---\n\n';
+                            summaryMessage += '*View detailed results in the panel on the left.*';
+
+                            // Add the summary to chat
+                            setMessages(prev => [...prev, {
+                                role: 'assistant',
+                                content: summaryMessage,
+                                timestamp: new Date()
+                            }]);
+
+                            setIsAnalyzing(false);
+                        })
+                        .catch(err => {
+                            console.error('❌ Failed to fetch results:', err);
+                            setIsAnalyzing(false);
+                        });
+                }
+            });
+
+            eventSource.onerror = (error) => {
+                console.error('EventSource error:', error);
+                eventSource.close();
+                setMessages(prev => [...prev, {
+                    role: 'system',
+                    content: '❌ Analysis stream connection failed',
+                    timestamp: new Date()
+                }]);
+                setIsAnalyzing(false);
+            };
+
         } catch (error: any) {
             console.error('Analysis failed:', error);
             setMessages(prev => [...prev, {
                 role: 'system',
-                content: `❌ Analysis failed: ${error.response?.data?.detail || error.message}`,
+                content: `❌ Analysis failed: ${error.message}`,
                 timestamp: new Date()
             }]);
-        } finally {
             setIsAnalyzing(false);
         }
     };
@@ -319,6 +396,16 @@ export default function MedRAXPlatform() {
                 content: response.data.response,
                 timestamp: new Date()
             }]);
+
+            // Fetch updated results after each message (tools might have been called)
+            try {
+                const resultsResponse = await axios.get(`${API_BASE}/api/analysis/${sessionId}`);
+                if (resultsResponse.data.results && Object.keys(resultsResponse.data.results).length > 0) {
+                    setAnalysisResults(Object.entries(resultsResponse.data.results));
+                }
+            } catch (err) {
+                console.error('Failed to fetch results:', err);
+            }
         } catch (error) {
             console.error('Chat failed:', error);
             setMessages(prev => [...prev, {
@@ -369,76 +456,21 @@ export default function MedRAXPlatform() {
             {/* Main Content */}
             <div className="flex-1 flex flex-col">
                 {/* Header */}
-                <div className="bg-zinc-900 border-b border-zinc-800 p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="bg-blue-600 rounded-lg p-2">
-                            <Bot className="h-5 w-5" />
-                        </div>
-                        <div>
-                            <h1 className="font-semibold">MedRAX Analysis Platform</h1>
-                            <p className="text-xs text-zinc-400">
-                                {patientInfo.name ? `Patient: ${patientInfo.name}${patientInfo.age ? `, ${patientInfo.age}yo` : ''}` : 'AI-Powered Chest X-Ray Analysis'}
-                            </p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={() => setShowPatientForm(!showPatientForm)}
-                            className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs font-medium border border-zinc-700"
-                        >
-                            {patientInfo.name ? '👤 Patient Info' : '➕ Add Patient Info'}
-                        </button>
-                        {sessionId && (
-                            <div className="text-xs text-zinc-500">
-                                Session: {sessionId.slice(0, 8)}
-                            </div>
-                        )}
-                        <div className={`px-3 py-1 rounded-full text-xs font-medium ${isAnalyzing ? 'bg-yellow-900 text-yellow-300' : 'bg-green-900 text-green-300'}`}>
-                            {isAnalyzing ? '⏳ Analyzing...' : '✅ Ready'}
-                        </div>
-                    </div>
-                </div>
+                <Header
+                    sessionId={sessionId}
+                    patientInfo={patientInfo}
+                    isAnalyzing={isAnalyzing}
+                    showPatientForm={showPatientForm}
+                    onTogglePatientForm={() => setShowPatientForm(!showPatientForm)}
+                />
 
                 {/* Patient Info Form */}
                 {showPatientForm && (
-                    <div className="bg-zinc-900 border-b border-zinc-800 p-4">
-                        <div className="max-w-2xl">
-                            <h3 className="text-sm font-semibold mb-3">Patient Information</h3>
-                            <div className="grid grid-cols-3 gap-3">
-                                <input
-                                    type="text"
-                                    placeholder="Name"
-                                    value={patientInfo.name}
-                                    onChange={(e) => setPatientInfo(prev => ({ ...prev, name: e.target.value }))}
-                                    className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm"
-                                />
-                                <input
-                                    type="text"
-                                    placeholder="Age"
-                                    value={patientInfo.age}
-                                    onChange={(e) => setPatientInfo(prev => ({ ...prev, age: e.target.value }))}
-                                    className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm"
-                                />
-                                <select
-                                    value={patientInfo.gender}
-                                    onChange={(e) => setPatientInfo(prev => ({ ...prev, gender: e.target.value }))}
-                                    className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm"
-                                >
-                                    <option value="">Gender</option>
-                                    <option value="male">Male</option>
-                                    <option value="female">Female</option>
-                                    <option value="other">Other</option>
-                                </select>
-                            </div>
-                            <textarea
-                                placeholder="Notes..."
-                                value={patientInfo.notes}
-                                onChange={(e) => setPatientInfo(prev => ({ ...prev, notes: e.target.value }))}
-                                className="mt-3 w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm"
-                                rows={2}
-                            />
-                        </div>
-                    </div>
+                    <PatientInfoForm
+                        patientInfo={patientInfo}
+                        onChange={setPatientInfo}
+                        onClose={() => setShowPatientForm(false)}
+                    />
                 )}
 
                 {/* Main Content Area */}
@@ -582,29 +614,19 @@ export default function MedRAXPlatform() {
                                                     />
                                                 )}
 
-                                                {!isClassification && !isSegmentation && !isReport && (isExpert || isGrounding) && (
-                                                    <div className="space-y-4">
-                                                        {/* Display expert/grounding results nicely */}
-                                                        <div className="text-sm text-zinc-300 whitespace-pre-wrap">
-                                                            {result.result?.response ||
-                                                                (typeof result.result === 'string' ? result.result : '') ||
-                                                                (typeof result === 'string' ? result : '')}
-                                                        </div>
-                                                        {(result.result?.response || result.result) && (
-                                                            <button
-                                                                onClick={() => {
-                                                                    const el = document.getElementById(`raw-${toolName}`);
-                                                                    if (el) el.classList.toggle('hidden');
-                                                                }}
-                                                                className="text-xs text-zinc-500 hover:text-zinc-300"
-                                                            >
-                                                                Show/Hide raw data
-                                                            </button>
-                                                        )}
-                                                        <pre id={`raw-${toolName}`} className="hidden bg-zinc-950 p-4 rounded-lg text-xs overflow-x-auto">
-                                                            {JSON.stringify(result, null, 2)}
-                                                        </pre>
-                                                    </div>
+                                                {isGrounding && (
+                                                    <GroundingResults
+                                                        result={result}
+                                                        idx={idx}
+                                                        apiBase={API_BASE}
+                                                    />
+                                                )}
+
+                                                {isExpert && (
+                                                    <VQAResults
+                                                        result={result}
+                                                        idx={idx}
+                                                    />
                                                 )}
 
                                                 {!isClassification && !isSegmentation && !isReport && !isExpert && !isGrounding && (
@@ -619,57 +641,34 @@ export default function MedRAXPlatform() {
                         )}
                     </div>
 
-                    {/* Right: Chat */}
-                    <div className="w-96 bg-zinc-900/50 border-l border-zinc-800 flex flex-col">
-                        <div className="p-4 border-b border-zinc-800">
-                            <h2 className="text-sm font-semibold text-zinc-400">Chat with AI</h2>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                            {messages.map((msg, idx) => (
-                                <div key={idx} className={`${msg.role === 'user' ? 'text-right' : ''}`}>
-                                    <div
-                                        className={`inline-block px-4 py-2 rounded-lg text-sm max-w-full ${msg.role === 'user'
-                                            ? 'bg-blue-600 text-white'
-                                            : msg.role === 'system'
-                                                ? 'bg-zinc-800 text-zinc-300'
-                                                : 'bg-zinc-800 text-white'
-                                            }`}
-                                    >
-                                        <div className="whitespace-pre-wrap break-words">
-                                            {msg.content}
-                                        </div>
-                                    </div>
-                                    <div className="text-xs text-zinc-600 mt-1">
-                                        {msg.timestamp.toLocaleTimeString()}
-                                    </div>
-                                </div>
-                            ))}
-                            <div ref={messagesEndRef} />
-                        </div>
-
-                        <div className="p-4 border-t border-zinc-800">
-                            <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    value={inputMessage}
-                                    onChange={(e) => setInputMessage(e.target.value)}
-                                    onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                                    placeholder="Ask about the analysis..."
-                                    className="flex-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm"
-                                    disabled={isLoading}
-                                />
-                                <button
-                                    onClick={sendMessage}
-                                    disabled={isLoading}
-                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50"
-                                >
-                                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : '→'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                    {/* Right: Chat / Tools Panel */}
+                    <ChatPanel
+                        sessionId={sessionId}
+                        messages={messages}
+                        inputMessage={inputMessage}
+                        isLoading={isLoading}
+                        rightSidebarMode={rightSidebarMode}
+                        apiBase={API_BASE}
+                        onInputChange={setInputMessage}
+                        onSendMessage={sendMessage}
+                        onClearChat={clearChat}
+                        onNewThread={newThread}
+                        onSetMode={setRightSidebarMode}
+                        onImageClick={(src, alt) => setModalImage({ src, alt })}
+                    />
                 </div>
+
+                {/* Image Modal */}
+                {modalImage && (
+                    <ImageModal
+                        src={modalImage.src}
+                        alt={modalImage.alt}
+                        onClose={() => setModalImage(null)}
+                    />
+                )}
+
+                {/* Pipeline Visualization */}
+                <PipelineVisualization steps={pipelineSteps} isActive={isAnalyzing} />
 
                 {/* Backend Logs - Collapsible at bottom */}
                 {backendLogs.length > 0 && (

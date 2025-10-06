@@ -29,11 +29,11 @@ class XRayVQATool(BaseTool):
 
     name: str = "chest_xray_expert"
     description: str = (
-        "A versatile tool for analyzing chest X-rays. "
-        "Can perform multiple tasks including: visual question answering, report generation, "
-        "abnormality detection, comparative analysis, anatomical description, "
-        "and clinical interpretation. Input should be paths to X-ray images "
-        "and a natural language prompt describing the analysis needed."
+        "TEXT-BASED visual question answering for chest X-rays using CheXagent. "
+        "Use this for: answering questions, describing findings, comparative analysis. "
+        "Returns ONLY TEXT responses (no images, no bounding boxes). "
+        "For visual localization with bounding boxes, use xray_phrase_grounding instead. "
+        "Input: image paths and a natural language question."
     )
     args_schema: Type[BaseModel] = XRayVQAToolInput
     return_direct: bool = True

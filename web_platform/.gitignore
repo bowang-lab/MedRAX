@@ -15,6 +15,7 @@ ENV/
 
 # Backend
 backend/temp/*
+backend/temp-models/*
 !backend/temp/.gitkeep
 backend/*.log
 backend/*.pid

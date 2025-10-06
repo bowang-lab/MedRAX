@@ -11,6 +11,11 @@ from typing import Dict, List, Any, Tuple
 medrax_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(medrax_root))
 
+# Import logger
+from logger_config import get_logger
+
+logger = get_logger(__name__)
+
 def create_mock_agent():
     """Create a mock agent for development when full MedRAX isn't available"""
     class MockAgent:
@@ -51,7 +56,7 @@ def initialize_medrax_agent(
         from dotenv import load_dotenv
         load_dotenv()
         
-        # Import MedRAX components
+        # Import MedRAX components (at top of function to avoid circular imports)
         from langgraph.checkpoint.memory import MemorySaver
         from langchain_openai import ChatOpenAI
         from medrax.agent import Agent
@@ -68,93 +73,93 @@ def initialize_medrax_agent(
             DicomProcessorTool
         )
         
-        print("✅ MedRAX components imported successfully")
+        logger.info("success", message="MedRAX components imported successfully")
         
         # Load prompts - fix path
         prompt_path = medrax_root / prompt_file
         if not prompt_path.exists():
-            print(f"⚠️  Prompts file not found at {prompt_path}, using default prompt")
+            logger.warning("warning", message=f"Prompts file not found at {prompt_path}, using default prompt")
             prompt = "You are a medical AI assistant specialized in analyzing chest X-rays."
         else:
             prompts = load_prompts_from_file(str(prompt_path))
             prompt = prompts.get("MEDICAL_ASSISTANT", "You are a medical AI assistant.")
         
-        print(f"📝 Using system prompt (length: {len(prompt)})")
+        logger.info("message", text=f"📝 Using system prompt (length: {len(prompt)})")
         
         # Initialize tools
-        print(f"🔧 Initializing tools on device: {device}")
+        logger.info("message", text=f"🔧 Initializing tools on device: {device}")
         tools_list = []
         tools_dict = {}
         
         try:
-            print("   Loading ImageVisualizerTool...")
+            logger.info("message", text="   Loading ImageVisualizerTool...")
             tool = ImageVisualizerTool()
             tools_list.append(tool)
             tools_dict[tool.name] = tool
-            print(f"   ✅ {tool.name}")
+            logger.info("message", text=f"   ✅ {tool.name}")
         except Exception as e:
-            print(f"   ⚠️  ImageVisualizerTool failed: {e}")
+            logger.info("message", text=f"   ⚠️  ImageVisualizerTool failed: {e}")
         
         try:
-            print("   Loading ChestXRayClassifierTool...")
+            logger.info("message", text="   Loading ChestXRayClassifierTool...")
             tool = ChestXRayClassifierTool(device=device)
             tools_list.append(tool)
             tools_dict[tool.name] = tool
-            print(f"   ✅ {tool.name}")
+            logger.info("message", text=f"   ✅ {tool.name}")
         except Exception as e:
-            print(f"   ⚠️  ChestXRayClassifierTool failed: {e}")
+            logger.info("message", text=f"   ⚠️  ChestXRayClassifierTool failed: {e}")
         
         try:
-            print("   Loading ChestXRaySegmentationTool...")
+            logger.info("message", text="   Loading ChestXRaySegmentationTool...")
             tool = ChestXRaySegmentationTool(device=device)
             tools_list.append(tool)
             tools_dict[tool.name] = tool
-            print(f"   ✅ {tool.name}")
+            logger.info("message", text=f"   ✅ {tool.name}")
         except Exception as e:
-            print(f"   ⚠️  ChestXRaySegmentationTool failed: {e}")
+            logger.info("message", text=f"   ⚠️  ChestXRaySegmentationTool failed: {e}")
         
         try:
-            print("   Loading XRayVQATool...")
+            logger.info("message", text="   Loading XRayVQATool...")
             tool = XRayVQATool(device=device)
             tools_list.append(tool)
             tools_dict[tool.name] = tool
-            print(f"   ✅ {tool.name}")
+            logger.info("message", text=f"   ✅ {tool.name}")
         except Exception as e:
-            print(f"   ⚠️  XRayVQATool failed: {e}")
+            logger.info("message", text=f"   ⚠️  XRayVQATool failed: {e}")
         
         try:
-            print("   Loading ChestXRayReportGeneratorTool...")
+            logger.info("message", text="   Loading ChestXRayReportGeneratorTool...")
             tool = ChestXRayReportGeneratorTool(device=device)
             tools_list.append(tool)
             tools_dict[tool.name] = tool
-            print(f"   ✅ {tool.name}")
+            logger.info("message", text=f"   ✅ {tool.name}")
         except Exception as e:
-            print(f"   ⚠️  ChestXRayReportGeneratorTool failed: {e}")
+            logger.info("message", text=f"   ⚠️  ChestXRayReportGeneratorTool failed: {e}")
         
         # Grounding tool disabled - requires MAIRA-2 model (very large, not available)
         # try:
-        #     print("   Loading XRayPhraseGroundingTool...")
+        #     logger.info("message", text="   Loading XRayPhraseGroundingTool...")
         #     tool = XRayPhraseGroundingTool(device=device)
         #     tools_list.append(tool)
         #     tools_dict[tool.name] = tool
-        #     print(f"   ✅ {tool.name}")
+        #     logger.info("message", text=f"   ✅ {tool.name}")
         # except Exception as e:
-        #     print(f"   ⚠️  XRayPhraseGroundingTool failed: {e}")
+        #     logger.info("message", text=f"   ⚠️  XRayPhraseGroundingTool failed: {e}")
         
         try:
-            print("   Loading DicomProcessorTool...")
+            logger.info("message", text="   Loading DicomProcessorTool...")
             tool = DicomProcessorTool()
             tools_list.append(tool)
             tools_dict[tool.name] = tool
-            print(f"   ✅ {tool.name}")
+            logger.info("message", text=f"   ✅ {tool.name}")
         except Exception as e:
-            print(f"   ⚠️  DicomProcessorTool failed: {e}")
+            logger.info("message", text=f"   ⚠️  DicomProcessorTool failed: {e}")
         
         if not tools_list:
-            print("❌ No tools loaded successfully, falling back to mock")
+            logger.error("error", message="No tools loaded successfully, falling back to mock")
             return create_mock_agent()
         
-        print(f"✅ Loaded {len(tools_list)} tools successfully")
+        logger.info("success", message=f"Loaded {len(tools_list)} tools successfully")
         
         # Create agent
         checkpointer = MemorySaver()
@@ -174,20 +179,20 @@ def initialize_medrax_agent(
             log_dir=temp_dir
         )
         
-        print("✅ MedRAX agent initialized successfully with real tools!")
+        logger.info("success", message="MedRAX agent initialized successfully with real tools!")
         return agent, tools_dict
         
     except Exception as e:
         import traceback
-        print(f"❌ Failed to initialize MedRAX agent: {e}")
-        print(f"   Traceback: {traceback.format_exc()}")
-        print("🔧 Using mock agent for development")
+        logger.error("error", message=f"Failed to initialize MedRAX agent: {e}")
+        logger.info("message", text=f"   Traceback: {traceback.format_exc()}")
+        logger.info("message", text="🔧 Using mock agent for development")
         return create_mock_agent()
 
 def check_medrax_availability():
     """Check if MedRAX components are available"""
     try:
-        from medrax.agent import Agent
+        import medrax.agent
         return True
     except ImportError:
         return False

@@ -11,6 +11,11 @@ import re
 from pathlib import Path
 from typing import Optional, AsyncGenerator, List, Tuple
 
+# Import logger
+from logger_config import get_logger
+
+logger = get_logger(__name__)
+
 def parse_numpy_repr(s: str):
     """Parse a string containing numpy type constructors like 'np.float32(0.5)'"""
     # Replace numpy type constructors with their values
@@ -61,7 +66,7 @@ class MinimalChatInterface:
                 output, _ = self.tools_dict["DicomProcessorTool"]._run(str(saved_path))
                 display_path = output["image_path"]
             except Exception as e:
-                print(f"DICOM processing failed: {e}")
+                logger.info("message", text=f"DICOM processing failed: {e}")
                 display_path = str(saved_path)
         else:
             display_path = str(saved_path)
@@ -109,7 +114,7 @@ class MinimalChatInterface:
                         ],
                     })
                 except Exception as e:
-                    print(f"Error processing image {image_path}: {e}")
+                    logger.info("message", text=f"Error processing image {image_path}: {e}")
 
         if message is not None:
             messages.append({"role": "user", "content": [{"type": "text", "text": message}]})
@@ -124,7 +129,8 @@ class MinimalChatInterface:
                 return
             
             # Process through the agent
-            for event in self.agent.workflow.stream(
+            # CRITICAL: Use astream() not stream() for AsyncSqliteSaver
+            async for event in self.agent.workflow.astream(
                 {"messages": messages}, {"configurable": {"thread_id": self.current_thread_id}}
             ):
                 if isinstance(event, dict):
@@ -155,10 +161,10 @@ class MinimalChatInterface:
                                 else:
                                     tool_result = parsed
                                     
-                                print(f"🔍 Parsed {tool_name}: type={type(tool_result).__name__}")
+                                logger.info("message", text=f"🔍 Parsed {tool_name}: type={type(tool_result).__name__}")
                             except (ValueError, SyntaxError) as e:
                                 # If parsing fails, it might contain numpy types - try string manipulation
-                                print(f"⚠️  ast.literal_eval failed for {tool_name}, trying manual parse: {str(e)[:100]}")
+                                logger.warning("warning", message=f"ast.literal_eval failed for {tool_name}, trying manual parse: {str(e)[:100]}")
                                 # Store as-is, frontend will handle
                                 tool_result = message.content
 
@@ -166,7 +172,7 @@ class MinimalChatInterface:
                             if tool_result:
                                 # If parsing failed and we got a string, try to extract the tuple manually
                                 if isinstance(tool_result, str) and tool_result.startswith("(") and ", {" in tool_result:
-                                    print(f"⚠️  {tool_name} result is a string, storing as-is")
+                                    logger.warning("warning", message=f"{tool_name} result is a string, storing as-is")
                                     # Store the string as result - frontend will show it for debugging
                                     self.latest_tool_results[tool_name] = {
                                         "result": tool_result,
@@ -179,7 +185,7 @@ class MinimalChatInterface:
                                         "result": result_data,
                                         "metadata": metadata
                                     }
-                                    print(f"✅ Stored {tool_name} result: {type(result_data).__name__} with {len(metadata)} metadata fields")
+                                    logger.info("success", message=f"Stored {tool_name} result: {type(result_data).__name__} with {len(metadata)} metadata fields")
                                 elif isinstance(tool_result, dict):
                                     # Some tools return just a dict
                                     self.latest_tool_results[tool_name] = {

@@ -9,6 +9,10 @@ import torch
 import torch.nn.functional as F
 import torchvision
 import torchxrayvision as xrv
+
+# CRITICAL: Set non-GUI backend BEFORE importing pyplot to avoid macOS threading issues
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend (no GUI windows)
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 

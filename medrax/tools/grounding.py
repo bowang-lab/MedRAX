@@ -2,6 +2,10 @@ from typing import Dict, List, Optional, Tuple, Type, Any
 from pathlib import Path
 import uuid
 import tempfile
+
+# CRITICAL: Set non-GUI backend BEFORE importing pyplot to avoid macOS threading issues
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend (no GUI windows)
 import matplotlib.pyplot as plt
 import torch
 from PIL import Image
@@ -39,12 +43,12 @@ class XRayPhraseGroundingTool(BaseTool):
 
     name: str = "xray_phrase_grounding"
     description: str = (
-        "Locates and visualizes specific medical findings in chest X-ray images. "
-        "Takes a chest X-ray image and medical phrase to locate (e.g., 'Pleural effusion', 'Cardiomegaly'). "
-        "Returns bounding box coordinates in format [x_topleft, y_topleft, x_bottomright, y_bottomright] "
-        "where each value is between 0-1 representing relative position in the image, "
-        "a visualization of the finding's location, and confidence metadata. "
-        "Example input: {'image_path': '/path/to/xray.png', 'phrase': 'Pleural effusion', 'max_new_tokens': 300}"
+        "**PRIMARY TOOL FOR LOCALIZATION** - Generates annotated images with RED bounding boxes showing WHERE findings are located. "
+        "🎯 USE THIS TOOL when user says: 'show me', 'locate', 'find where', 'pinpoint', 'highlight', 'ground', or 'Use the grounding tool'. "
+        "❌ DO NOT use chest_xray_expert for this - it only returns text coordinates, not annotated images. "
+        "Takes: (1) image_path (2) phrase describing what to find (e.g., 'Cardiomegaly', 'Pleural effusion') "
+        "Returns: (1) visualization_path - annotated image with RED boxes (2) predictions with bounding box coordinates "
+        "Example: xray_phrase_grounding(image_path='temp/upload.jpg', phrase='Cardiomegaly')"
     )
     args_schema: Type[BaseModel] = XRayPhraseGroundingInput
 
@@ -150,14 +154,23 @@ class XRayPhraseGroundingTool(BaseTool):
             Tuple[Dict, Dict]: Output dictionary and metadata dictionary
         """
         try:
+            print(f"[PhraseGrounding] 🎯 Starting phrase grounding for: '{phrase}'")
+            print(f"[PhraseGrounding] 📂 Loading image: {image_path}")
+            
             image = Image.open(image_path)
             if image.mode != "RGB":
                 image = image.convert("RGB")
+            
+            print(f"[PhraseGrounding] ✅ Image loaded - Size: {image.size}")
+            print(f"[PhraseGrounding] 🔄 Preprocessing image and phrase...")
 
             inputs = self.processor.format_and_preprocess_phrase_grounding_input(
                 frontal_image=image, phrase=phrase, return_tensors="pt"
             )
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
+            
+            print(f"[PhraseGrounding] 🧠 Running Maira-2 inference on {self.device}...")
+            print(f"[PhraseGrounding] ⏳ This may take 1-3 minutes on CPU (10GB model)...")
 
             with torch.no_grad():
                 output = self.model.generate(
@@ -165,6 +178,9 @@ class XRayPhraseGroundingTool(BaseTool):
                     max_new_tokens=max_new_tokens,
                     use_cache=True,
                 )
+            
+            print(f"[PhraseGrounding] ✅ Model inference completed!")
+            print(f"[PhraseGrounding] 🔍 Decoding predictions...")
 
             prompt_length = inputs["input_ids"].shape[-1]
             decoded_text = self.processor.decode(
@@ -173,6 +189,8 @@ class XRayPhraseGroundingTool(BaseTool):
             predictions = self.processor.convert_output_to_plaintext_or_grounded_sequence(
                 decoded_text
             )
+            
+            print(f"[PhraseGrounding] 📊 Found {len(predictions)} prediction(s)")
 
             metadata = {
                 "image_path": image_path,
@@ -183,6 +201,7 @@ class XRayPhraseGroundingTool(BaseTool):
             }
 
             if not predictions:
+                print(f"[PhraseGrounding] ⚠️  No findings detected for '{phrase}'")
                 output = {
                     "predictions": [],
                     "visualization_path": None,
@@ -217,10 +236,12 @@ class XRayPhraseGroundingTool(BaseTool):
 
             # Create visualization with all bounding boxes
             if processed_predictions:
+                print(f"[PhraseGrounding] 🎨 Creating visualization with bounding boxes...")
                 all_bboxes = []
                 for pred in processed_predictions:
                     all_bboxes.extend(pred["bounding_boxes"]["image_coordinates"])
                 viz_path = self._visualize_bboxes(image, all_bboxes, phrase)
+                print(f"[PhraseGrounding] 💾 Visualization saved: {viz_path}")
             else:
                 viz_path = None
                 metadata["analysis_status"] = "completed_no_finding"
@@ -229,7 +250,8 @@ class XRayPhraseGroundingTool(BaseTool):
                 "predictions": processed_predictions,
                 "visualization_path": viz_path,
             }
-
+            
+            print(f"[PhraseGrounding] ✅ Grounding completed successfully!")
             return output, metadata
 
         except Exception as e:

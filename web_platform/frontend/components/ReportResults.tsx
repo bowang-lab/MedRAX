@@ -16,15 +16,52 @@ export default function ReportResults({ result, idx }: ReportResultsProps) {
         return null;
     }
 
-    const findings = result.result.findings || result.result.Findings || '';
-    const impression = result.result.impression || result.result.Impression || '';
+    // Try to parse the result string if it contains "CHEST X-RAY REPORT"
+    let findings = '';
+    let impression = '';
+
+    if (typeof result.result === 'string') {
+        const reportText = result.result;
+
+        // Extract FINDINGS section
+        const findingsMatch = reportText.match(/FINDINGS:\s*([\s\S]*?)(?=\n\nIMPRESSION:|$)/i);
+        if (findingsMatch) {
+            findings = findingsMatch[1].trim();
+        }
+
+        // Extract IMPRESSION section
+        const impressionMatch = reportText.match(/IMPRESSION:\s*([\s\S]*?)$/i);
+        if (impressionMatch) {
+            impression = impressionMatch[1].trim();
+        }
+
+        // If no sections found, use the whole text as findings
+        if (!findings && !impression) {
+            findings = reportText;
+        }
+    } else if (typeof result.result === 'object') {
+        findings = result.result.findings || result.result.Findings || '';
+        impression = result.result.impression || result.result.Impression || '';
+    }
 
     return (
         <div className="space-y-4">
             {/* Report Header */}
-            <div className="flex items-center gap-2 pb-2 border-b border-zinc-700">
-                <FileText className="h-5 w-5 text-blue-400" />
-                <h3 className="text-lg font-semibold">Radiology Report</h3>
+            <div className="flex items-center justify-between pb-2 border-b border-zinc-700">
+                <div className="flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-blue-400" />
+                    <h3 className="text-lg font-semibold">Radiology Report</h3>
+                </div>
+                {result.metadata && (
+                    <div className="flex gap-4 text-xs text-zinc-500">
+                        {result.metadata.model && (
+                            <div>Model: <span className="text-zinc-400">{result.metadata.model}</span></div>
+                        )}
+                        {result.metadata.total_time_seconds && (
+                            <div>Time: <span className="text-zinc-400">{result.metadata.total_time_seconds.toFixed(2)}s</span></div>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Findings Section */}
@@ -75,18 +112,6 @@ export default function ReportResults({ result, idx }: ReportResultsProps) {
                                 {impression}
                             </p>
                         </div>
-                    )}
-                </div>
-            )}
-
-            {/* Metadata */}
-            {result.metadata && (
-                <div className="text-xs text-zinc-500 space-y-1 pt-2 border-t border-zinc-800">
-                    {result.metadata.model && (
-                        <div>Model: <span className="text-zinc-400">{result.metadata.model}</span></div>
-                    )}
-                    {result.metadata.total_time_seconds && (
-                        <div>Generation Time: <span className="text-zinc-400">{result.metadata.total_time_seconds.toFixed(2)}s</span></div>
                     )}
                 </div>
             )}

@@ -5,6 +5,18 @@ python-dotenv==1.0.0
 pydantic==2.5.0
 pandas==2.1.0
 
+# Logging
+structlog==25.4.0
+python-json-logger==3.3.0
+colorama==0.4.6
+
+# Database & Persistence
+langgraph-checkpoint-sqlite==2.0.11
+aiosqlite==0.21.0
+
+# Streaming
+sse-starlette==3.0.2
+
 # These are already in the MedRAX requirements
 # langchain-core
 # langchain-openai
@@ -12,6 +24,13 @@ pandas==2.1.0
 # gradio
 # numpy
 # pillow
+# torch
+# torchvision
+# transformers
+# cohere
+# langchain-cohere
+# langchain-chroma
+# datasets
 
 
 

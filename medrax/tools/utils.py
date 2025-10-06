@@ -1,5 +1,9 @@
 from typing import Optional, Type, Dict, Tuple
 from pydantic import BaseModel, Field
+
+# CRITICAL: Set non-GUI backend BEFORE importing pyplot to avoid macOS threading issues
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend (no GUI windows)
 import matplotlib.pyplot as plt
 import skimage.io
 from pathlib import Path
