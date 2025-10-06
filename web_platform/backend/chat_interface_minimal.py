@@ -43,6 +43,7 @@ class MinimalChatInterface:
         self.display_files = []   # List of display file paths
         self.display_file_path = None  # For compatibility with image visualizer
         self.latest_tool_results = {}  # Store latest tool execution results
+        self.last_tool_calls = []  # Track tool calls from last message
     
     def handle_upload(self, file_path: str) -> str:
         """Handle file upload and return display path."""
@@ -121,6 +122,7 @@ class MinimalChatInterface:
 
         try:
             responses = []
+            self.last_tool_calls = []  # Reset for this message
             
             # Check if agent is available
             if self.agent is None:
@@ -146,6 +148,11 @@ class MinimalChatInterface:
                     elif "execute" in event:
                         for message in event["execute"]["messages"]:
                             tool_name = message.name
+                            
+                            # Yield tool start event
+                            tool_start_msg = f"__TOOL_START__{tool_name}__"
+                            yield tool_start_msg
+                            
                             # Safely parse tool result
                             # message.content contains string like: "[({'key': np.float32(0.5)}, {'meta': 'data'})]"
                             try:
@@ -198,6 +205,12 @@ class MinimalChatInterface:
                                         "metadata": {}
                                     }
                                 
+                                # Track this tool call
+                                self.last_tool_calls.append({
+                                    "tool_name": tool_name,
+                                    "status": "completed"
+                                })
+                                
                                 # Format tool response based on tool type (don't show raw data)
                                 if "classifier" in tool_name.lower():
                                     tool_response = f"🔧 {tool_name}: Classification completed"
@@ -210,6 +223,10 @@ class MinimalChatInterface:
                                 else:
                                     # For other tools, show a brief summary
                                     tool_response = f"🔧 {tool_name}: Completed"
+                                
+                                # Yield tool completion event
+                                tool_done_msg = f"__TOOL_DONE__{tool_name}__"
+                                yield tool_done_msg
                                 
                                 responses.append(tool_response)
                                 yield tool_response

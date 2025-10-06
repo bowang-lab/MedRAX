@@ -389,19 +389,34 @@ async def chat_with_agent(session_id: str, request: ChatRequest):
     try:
         # Process message through minimal chat interface
         responses = []
+        tool_events = []  # Track tool execution
         async for response in chat_interface.process_message(
             request.message, 
             request.image_path
         ):
-            responses.append(response)
+            # Parse tool events (special markers)
+            if response.startswith("__TOOL_START__"):
+                tool_name = response.replace("__TOOL_START__", "").replace("__", "")
+                tool_events.append({"tool_name": tool_name, "status": "running"})
+            elif response.startswith("__TOOL_DONE__"):
+                tool_name = response.replace("__TOOL_DONE__", "").replace("__", "")
+                # Update status
+                for event in tool_events:
+                    if event["tool_name"] == tool_name:
+                        event["status"] = "completed"
+            else:
+                responses.append(response)
         
         # Combine all responses
         final_response = "\n\n".join(responses) if responses else "No response generated"
         
+        # Get tool calls from chat interface
+        tool_calls_data = chat_interface.last_tool_calls if hasattr(chat_interface, 'last_tool_calls') else []
+        
         return ChatResponse(
             response=final_response,
             session_id=session_id,
-            tool_calls=[]  # Can be enhanced to return actual tool calls
+            tool_calls=tool_calls_data
         )
         
     except Exception as e:

@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity } from 'lucide-react';
+import { Activity, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface PatientSession {
     sessionId: string;
@@ -15,13 +15,24 @@ interface PatientSidebarProps {
     sessions: PatientSession[];
     onSelectSession: (sessionId: string) => void;
     onNewPatient: () => void;
+    collapsed?: boolean;
+    onToggleCollapse?: () => void;
 }
 
-export default function PatientSidebar({ sessions, onSelectSession, onNewPatient }: PatientSidebarProps) {
+export default function PatientSidebar({ sessions, onSelectSession, onNewPatient, collapsed = false, onToggleCollapse }: PatientSidebarProps) {
     return (
-        <div className="w-64 bg-zinc-900 border-r border-zinc-800 flex flex-col">
-            <div className="p-4 border-b border-zinc-800">
+        <div className={`relative transition-all duration-300 ease-in-out bg-zinc-900 border-r border-zinc-800 flex flex-col ${collapsed ? 'w-0' : 'w-64'} overflow-hidden`}>
+            <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-zinc-400">Recent Patients</h2>
+                {onToggleCollapse && (
+                    <button
+                        onClick={onToggleCollapse}
+                        className="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-zinc-300 transition-colors"
+                        title="Collapse sidebar"
+                    >
+                        <ChevronLeft className="h-4 w-4" />
+                    </button>
+                )}
             </div>
 
             <div className="flex-1 overflow-y-auto">
