@@ -11,22 +11,21 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { Bot, Loader2, Terminal, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Bot, Loader2, Terminal, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Send, Settings, MessageSquare, Image, Plus } from 'lucide-react';
 import axios from 'axios';
 import { useAppStore } from '../lib/store';
-import Header from '../components/Header';
-import PatientInfoForm from '../components/PatientInfoForm';
-import PatientSidebar from '../components/PatientSidebar';
-import ChatPanel from '../components/ChatPanel';
-import ClassificationResults from '../components/ClassificationResults';
-import SegmentationResults from '../components/SegmentationResults';
-import ReportResults from '../components/ReportResults';
-import GroundingResults from '../components/GroundingResults';
-import VQAResults from '../components/VQAResults';
-import ImageModal from '../components/ImageModal';
-import ImageUploadZone from '../components/ImageUploadZone';
-import AnalysisProgress from '../components/AnalysisProgress';
-import PipelineVisualization from '../components/PipelineVisualization';
+import Header from '../components/layouts/Header';
+import PatientInfoForm from '../components/features/PatientInfoForm';
+import PatientSidebar from '../components/features/PatientSidebar';
+import ChatSidebar from '../components/features/ChatSidebar';
+import ToolOutputPanel from '../components/features/ToolOutputPanel';
+import ToolsPanel from '../components/features/ToolsPanel';
+import ImageGallery from '../components/features/ImageGallery';
+import ImageModal from '../components/ui/ImageModal';
+import ImageUploadZone from '../components/ui/ImageUploadZone';
+import AnalysisProgress from '../components/ui/AnalysisProgress';
+import PipelineVisualization from '../components/ui/PipelineVisualization';
+import MessageRenderer from '../components/ui/MessageRenderer';
 import { getAllSessions, saveSession, getSession, SessionData } from '../lib/sessionStorage';
 
 const API_BASE = 'http://localhost:8000';
@@ -45,8 +44,15 @@ interface PatientInfo {
 }
 
 export default function MedRAXPlatform() {
-    // Core state
-    const [sessionId, setSessionId] = useState<string | null>(null);
+    // Generate initial userId only once on mount
+    const [initialUserIdGenerated] = useState(() => `user-${Date.now()}`);
+
+    // Core state - Multi-chat architecture
+    const [userId, setUserId] = useState<string>(initialUserIdGenerated);
+    const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+    const [chats, setChats] = useState<any[]>([]);
+    const [sessionId, setSessionId] = useState<string | null>(null); // Legacy support
+
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputMessage, setInputMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -56,11 +62,14 @@ export default function MedRAXPlatform() {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisResults, setAnalysisResults] = useState<any[]>([]);
 
-    // Collapsible states
+    // Collapsible states - Updated for new layout
     const [patientSidebarCollapsed, setPatientSidebarCollapsed] = useState(false);
-    const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
-    const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(true); // Start collapsed
-    const [collapsedTools, setCollapsedTools] = useState<Set<number>>(new Set());
+    const [chatSidebarCollapsed, setChatSidebarCollapsed] = useState(false);
+    const [imageSidebarCollapsed, setImageSidebarCollapsed] = useState(false);
+    const [toolOutputCollapsed, setToolOutputCollapsed] = useState(false); // Start expanded to show results
+
+    // Right sidebar mode: 'results' (tool outputs) or 'management' (tool loading/management)
+    const [rightSidebarMode, setRightSidebarMode] = useState<'results' | 'management'>('results');
 
     // Patient info
     const [patientInfo, setPatientInfo] = useState<PatientInfo>({
@@ -79,25 +88,191 @@ export default function MedRAXPlatform() {
     const [backendLogs, setBackendLogs] = useState<string[]>([]);
 
     // UI state
-    const [rightSidebarMode, setRightSidebarMode] = useState<'chat' | 'tools'>('chat');
     const [pipelineSteps, setPipelineSteps] = useState<any[]>([]);
     const [modalImage, setModalImage] = useState<{ src: string, alt: string } | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const currentImage = uploadedImages[currentImageIndex] || null;
 
-    // Load session history on mount
+    // Auto-scroll to bottom of messages
     useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages]);
+
+    // Track if chats have been loaded to prevent double loading
+    const chatsLoadedRef = useRef(false);
+    const previousUserIdRef = useRef<string | null>(null);
+
+    // Load chats on mount and when userId changes
+    useEffect(() => {
+        // Reset loaded flag if userId actually changed
+        if (previousUserIdRef.current !== userId) {
+            chatsLoadedRef.current = false;
+            previousUserIdRef.current = userId;
+        }
+
+        // Prevent double loading (React StrictMode issue)
+        if (chatsLoadedRef.current) {
+            console.log('⏭️  Skipping duplicate chat load (already loaded)');
+            return;
+        }
+        chatsLoadedRef.current = true;
+
+        console.log('📋 Loading chats for userId:', userId);
         setSessionHistory(getAllSessions());
-        createSession();
-    }, []);
+
+        // Clear current state when switching users
+        setMessages([]);
+        setUploadedImages([]);
+        setCurrentImageIndex(0);
+        setAnalysisResults([]);
+        setCurrentChatId(null);
+        setChats([]);
+
+        // Load chats for the current user
+        loadUserChats();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userId]);
+
+    // Load chats for current user
+    const loadUserChats = async () => {
+        try {
+            const response = await axios.get(`${API_BASE}/api/users/${userId}/chats`);
+            setChats(response.data.chats);
+
+            // If no chats exist, create first one
+            if (response.data.chats.length === 0) {
+                console.log('📝 No chats found, creating first chat...');
+                await createNewChat();
+            } else {
+                // Select the first chat
+                console.log('📂 Loading existing chat:', response.data.chats[0].chat_id);
+                await selectChat(response.data.chats[0].chat_id);
+            }
+        } catch (error: any) {
+            console.error('Failed to load chats:', error);
+            // Only create a new chat if it's a connection error (user/chat doesn't exist yet)
+            // Don't create duplicate chats on other errors
+            if (error.response?.status === 404) {
+                console.log('📝 User has no chats yet, creating first chat...');
+                await createNewChat();
+            } else {
+                console.error('⚠️ Chat loading failed with unexpected error');
+                // Show error message but don't create duplicate chats
+                setMessages([{
+                    role: 'system',
+                    content: '⚠️ Failed to load chats. Please refresh the page.',
+                    timestamp: new Date()
+                }]);
+            }
+        }
+    };
+
+    // Create a new chat
+    const createNewChat = async (chatName?: string) => {
+        try {
+            const response = await axios.post(`${API_BASE}/api/users/${userId}/chats`, null, {
+                params: { chat_name: chatName }
+            });
+
+            const newChat = response.data;
+            setChats(prev => [newChat, ...prev]);
+            setCurrentChatId(newChat.chat_id);
+
+            // Reset state for new chat
+            setMessages([]);
+            setUploadedImages([]);
+            setCurrentImageIndex(0);
+            setAnalysisResults([]);
+
+            console.log('✅ New chat created:', newChat.chat_id);
+
+            setMessages([{
+                role: 'system',
+                content: '👋 New chat started. Upload medical images to begin analysis.',
+                timestamp: new Date()
+            }]);
+
+            return newChat.chat_id;
+        } catch (error) {
+            console.error('Failed to create chat:', error);
+            return null;
+        }
+    };
+
+    // Select a chat
+    const selectChat = async (chatId: string) => {
+        try {
+            setCurrentChatId(chatId);
+
+            // Fetch chat details
+            const response = await axios.get(`${API_BASE}/api/users/${userId}/chats/${chatId}`);
+            const chatData = response.data;
+
+            // Update state with chat data
+            setUploadedImages(chatData.uploaded_images || []);
+            setCurrentImageIndex(0);
+
+            // Load message history from backend
+            if (chatData.message_history && chatData.message_history.length > 0) {
+                const loadedMessages = chatData.message_history.map((msg: any) => ({
+                    role: msg.role,
+                    content: msg.content,
+                    timestamp: new Date(msg.timestamp)
+                }));
+                setMessages(loadedMessages);
+            } else {
+                // No history, show welcome message
+                setMessages([{
+                    role: 'system',
+                    content: `📂 Chat loaded: ${chatData.metadata.name}`,
+                    timestamp: new Date()
+                }]);
+            }
+
+            // Load analysis results if available
+            if (chatData.has_results) {
+                const resultsResponse = await axios.get(`${API_BASE}/api/analysis/${chatId}`);
+                setAnalysisResults(Object.entries(resultsResponse.data.results));
+            } else {
+                setAnalysisResults([]);
+            }
+
+            console.log('✅ Chat selected:', chatId);
+        } catch (error) {
+            console.error('Failed to load chat:', error);
+        }
+    };
+
+    // Delete a chat
+    const deleteChat = async (chatId: string) => {
+        try {
+            await axios.delete(`${API_BASE}/api/users/${userId}/chats/${chatId}`);
+            setChats(prev => prev.filter(c => c.chat_id !== chatId));
+
+            // If deleting current chat, switch to another or create new
+            if (chatId === currentChatId) {
+                const remainingChats = chats.filter(c => c.chat_id !== chatId);
+                if (remainingChats.length > 0) {
+                    await selectChat(remainingChats[0].chat_id);
+                } else {
+                    await createNewChat();
+                }
+            }
+
+            console.log('✅ Chat deleted:', chatId);
+        } catch (error) {
+            console.error('Failed to delete chat:', error);
+        }
+    };
 
     // Save session to history when there are changes
     useEffect(() => {
-        if (sessionId && (uploadedImages.length > 0 || messages.length > 0)) {
+        if (userId && (uploadedImages.length > 0 || messages.length > 0 || patientInfo.name)) {
             const sessionData: SessionData = {
-                sessionId,
+                sessionId: userId, // Use userId as the session identifier
                 patientName: patientInfo.name,
                 patientAge: patientInfo.age,
                 patientGender: patientInfo.gender,
@@ -111,7 +286,8 @@ export default function MedRAXPlatform() {
             saveSession(sessionData);
             setSessionHistory(getAllSessions());
         }
-    }, [sessionId, uploadedImages, analysisResults, messages.length]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userId, uploadedImages.length, analysisResults.length, messages.length, patientInfo.name, patientInfo.age, patientInfo.gender, patientInfo.notes]);
 
     const createSession = async (): Promise<string | null> => {
         try {
@@ -167,48 +343,26 @@ export default function MedRAXPlatform() {
     };
 
     const loadSession = async (savedSession: SessionData) => {
-        // Check if session exists on backend
-        try {
-            await axios.get(`${API_BASE}/api/chat/${savedSession.sessionId}`);
-            // Session exists, load it
-            setSessionId(savedSession.sessionId);
-            setPatientInfo({
-                name: savedSession.patientName,
-                age: savedSession.patientAge,
-                gender: savedSession.patientGender,
-                notes: savedSession.patientNotes
-            });
-            setUploadedImages(savedSession.uploadedImages);
-            setAnalysisResults(savedSession.analysisResults);
-            setMessages(savedSession.messages.map(m => ({
-                ...m,
-                timestamp: new Date(m.timestamp)
-            })));
-            setCurrentImageIndex(0);
-        } catch (error) {
-            console.error('Session not found on backend, creating new session with old data');
-            // Session doesn't exist on backend, create a new one
-            const newSessionId = await createSession();
-            if (newSessionId) {
-                // Load the old patient data
-                setPatientInfo({
-                    name: savedSession.patientName,
-                    age: savedSession.patientAge,
-                    gender: savedSession.patientGender,
-                    notes: savedSession.patientNotes
-                });
-                setUploadedImages(savedSession.uploadedImages);
-                setAnalysisResults(savedSession.analysisResults);
-                setMessages(savedSession.messages.map(m => ({
-                    ...m,
-                    timestamp: new Date(m.timestamp)
-                })));
-                setCurrentImageIndex(0);
-            }
-        }
+        console.log('Loading patient session:', savedSession);
+
+        // Set the user ID to the saved session's ID (use session ID as user ID)
+        const sessionUserId = savedSession.sessionId;
+        setUserId(sessionUserId);
+
+        // Load patient info
+        setPatientInfo({
+            name: savedSession.patientName,
+            age: savedSession.patientAge,
+            gender: savedSession.patientGender,
+            notes: savedSession.patientNotes
+        });
+
+        // The useEffect will trigger and load chats for this user
+        console.log('✅ Patient loaded, fetching chats for userId:', sessionUserId);
     };
 
     const startNewPatient = async () => {
+        // Clear all current state
         setMessages([]);
         setUploadedImages([]);
         setCurrentImageIndex(0);
@@ -216,22 +370,25 @@ export default function MedRAXPlatform() {
         setShowPatientForm(false);
         setPatientInfo({ name: '', age: '', gender: '', notes: '' });
 
-        const newSessionId = await createSession();
+        // Create a new user ID for the new patient
+        const newUserId = `user-${Date.now()}`;
+        setUserId(newUserId);
 
-        if (newSessionId) {
-            setMessages([{
-                role: 'system',
-                content: `🏥 New patient case started. Upload images to begin analysis.`,
-                timestamp: new Date()
-            }]);
-        }
+        // This will trigger the useEffect to load/create chats for the new user
+        console.log('✅ New patient started with userId:', newUserId);
+
+        // Show welcome message
+        setMessages([{
+            role: 'system',
+            content: `🏥 New patient case started. Upload images to begin analysis.`,
+            timestamp: new Date()
+        }]);
     };
 
     const uploadFile = async (file: File) => {
-        let currentSessionId = sessionId;
-        if (!currentSessionId) {
-            currentSessionId = await createSession();
-            if (!currentSessionId) return;
+        if (!currentChatId) {
+            console.error('No active chat');
+            return;
         }
 
         setIsLoading(true);
@@ -246,7 +403,7 @@ export default function MedRAXPlatform() {
 
         try {
             const response = await axios.post(
-                `${API_BASE}/api/upload/${currentSessionId}`,
+                `${API_BASE}/api/users/${userId}/chats/${currentChatId}/upload`,
                 formData,
                 { headers: { 'Content-Type': 'multipart/form-data' } }
             );
@@ -257,11 +414,18 @@ export default function MedRAXPlatform() {
                 return newImages;
             });
 
+            // Update chat list with new image count
+            setChats(prev => prev.map(chat =>
+                chat.chat_id === currentChatId
+                    ? { ...chat, image_count: response.data.total_images }
+                    : chat
+            ));
+
             setMessages(prev => {
                 const newMessages = [...prev];
                 newMessages[newMessages.length - 1] = {
                     role: 'system',
-                    content: `✅ ${file.name} uploaded successfully! Ready for analysis.`,
+                    content: `✅ ${file.name} uploaded successfully! (${response.data.total_images} images total)`,
                     timestamp: new Date()
                 };
                 return newMessages;
@@ -279,12 +443,11 @@ export default function MedRAXPlatform() {
     };
 
     const runCompleteAnalysis = async () => {
-        if (!sessionId || !currentImage || isAnalyzing) return;
+        if (!currentChatId || !currentImage || isAnalyzing) return;
 
-        // Auto-open chat sidebar on analysis
-        if (rightSidebarCollapsed) {
-            setRightSidebarCollapsed(false);
-            setRightSidebarMode('chat'); // Switch to chat mode
+        // Auto-open tool output panel to show results
+        if (toolOutputCollapsed) {
+            setToolOutputCollapsed(false);
         }
 
         setIsAnalyzing(true);
@@ -299,10 +462,12 @@ export default function MedRAXPlatform() {
         setBackendLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Starting analysis...`]);
 
         try {
-            // Use EventSource for Server-Sent Events streaming
-            const eventSource = new EventSource(
-                `${API_BASE}/api/chat/${sessionId}/stream?image_path=${encodeURIComponent(currentImage)}`
-            );
+            // Use the new chat-specific streaming endpoint (or fall back to legacy)
+            const streamUrl = currentChatId
+                ? `${API_BASE}/api/users/${userId}/chats/${currentChatId}/stream?image_path=${encodeURIComponent(currentImage)}`
+                : `${API_BASE}/api/chat/${sessionId}/stream?image_path=${encodeURIComponent(currentImage)}`;
+
+            const eventSource = new EventSource(streamUrl);
 
             eventSource.addEventListener('status', (event) => {
                 const data = JSON.parse(event.data);
@@ -321,8 +486,9 @@ export default function MedRAXPlatform() {
                 if (data.type === 'done' || data.type === 'error') {
                     eventSource.close();
 
-                    // Fetch final results
-                    axios.get(`${API_BASE}/api/analysis/${sessionId}`)
+                    // Fetch final results (use currentChatId if available)
+                    const analysisId = currentChatId || sessionId;
+                    axios.get(`${API_BASE}/api/analysis/${analysisId}`)
                         .then(resultsResponse => {
                             console.log('✅ Analysis results received:', resultsResponse.data);
                             const results = resultsResponse.data.results || {};
@@ -410,13 +576,7 @@ export default function MedRAXPlatform() {
     };
 
     const sendMessage = async () => {
-        if (!inputMessage.trim() || isLoading || !sessionId) return;
-
-        // Auto-open chat sidebar on first message
-        if (rightSidebarCollapsed) {
-            setRightSidebarCollapsed(false);
-            setRightSidebarMode('chat'); // Switch to chat mode
-        }
+        if (!inputMessage.trim() || isLoading || !currentChatId) return;
 
         const userMessage = inputMessage;
         setInputMessage('');
@@ -429,7 +589,7 @@ export default function MedRAXPlatform() {
         }]);
 
         try {
-            const response = await axios.post(`${API_BASE}/api/chat/${sessionId}`, {
+            const response = await axios.post(`${API_BASE}/api/users/${userId}/chats/${currentChatId}/messages`, {
                 message: userMessage,
                 image_path: currentImage
             });
@@ -453,12 +613,24 @@ export default function MedRAXPlatform() {
                 timestamp: new Date()
             }]);
 
+            // Update chat list with new message count
+            setChats(prev => prev.map(chat =>
+                chat.chat_id === currentChatId
+                    ? { ...chat, message_count: chat.message_count + 2, last_access: new Date().toISOString() }
+                    : chat
+            ));
+
             // Fetch updated results after each message (tools might have been called)
             try {
-                const resultsResponse = await axios.get(`${API_BASE}/api/analysis/${sessionId}`);
+                const resultsResponse = await axios.get(`${API_BASE}/api/analysis/${currentChatId}`);
                 if (resultsResponse.data.results && Object.keys(resultsResponse.data.results).length > 0) {
                     setAnalysisResults(Object.entries(resultsResponse.data.results));
                     setBackendLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 📊 Results updated: ${Object.keys(resultsResponse.data.results).length} tools`]);
+
+                    // Auto-expand tool output panel if collapsed
+                    if (toolOutputCollapsed) {
+                        setToolOutputCollapsed(false);
+                    }
                 }
             } catch (err) {
                 console.error('Failed to fetch results:', err);
@@ -488,23 +660,12 @@ export default function MedRAXPlatform() {
         files.forEach(file => uploadFile(file));
     };
 
-    // Toggle tool collapse
-    const toggleToolCollapse = (index: number) => {
-        const newCollapsed = new Set(collapsedTools);
-        if (newCollapsed.has(index)) {
-            newCollapsed.delete(index);
-        } else {
-            newCollapsed.add(index);
-        }
-        setCollapsedTools(newCollapsed);
-    };
-
     return (
         <div className="h-screen flex bg-zinc-950 text-white">
             {/* Analysis Progress Overlay */}
             <AnalysisProgress isAnalyzing={isAnalyzing} />
 
-            {/* Patient History Sidebar */}
+            {/* Left: Patient History Sidebar */}
             <PatientSidebar
                 sessions={sessionHistory.map((s, idx) => ({
                     sessionId: s.sessionId,
@@ -512,7 +673,7 @@ export default function MedRAXPlatform() {
                     patientAge: s.patientAge,
                     timestamp: new Date(s.timestamp),
                     imageCount: s.imageCount,
-                    isActive: s.sessionId === sessionId
+                    isActive: s.sessionId === userId // Check against userId, not sessionId
                 }))}
                 onSelectSession={async (id) => {
                     const session = getSession(id);
@@ -527,17 +688,52 @@ export default function MedRAXPlatform() {
             {patientSidebarCollapsed && (
                 <button
                     onClick={() => setPatientSidebarCollapsed(false)}
-                    className="fixed left-0 top-1/2 -translate-y-1/2 z-20 bg-zinc-800 hover:bg-zinc-700 text-white p-2 rounded-r-lg border border-l-0 border-zinc-700 transition-all duration-200 hover:scale-110 shadow-lg"
+                    className="fixed left-0 top-1/2 -translate-y-1/2 z-30 bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 text-white p-3 rounded-r-xl border border-l-0 border-blue-500/50 transition-all duration-200 hover:scale-110 shadow-xl shadow-blue-500/50 hover:shadow-2xl hover:shadow-blue-500/60"
+                    title="Show Patients"
                 >
-                    <ChevronRight className="h-4 w-4" />
+                    <ChevronRight className="h-5 w-5" />
                 </button>
             )}
+
+            {/* Chat Sidebar Expand Button (when collapsed) */}
+            {chatSidebarCollapsed && !patientSidebarCollapsed && (
+                <button
+                    onClick={() => setChatSidebarCollapsed(false)}
+                    className="fixed left-72 top-1/2 -translate-y-1/2 z-30 bg-gradient-to-r from-emerald-600 to-blue-600 hover:from-emerald-500 hover:to-blue-500 text-white p-3 rounded-r-xl border border-l-0 border-emerald-500/50 transition-all duration-200 hover:scale-110 shadow-xl shadow-emerald-500/50 hover:shadow-2xl hover:shadow-emerald-500/60"
+                    title="Show Conversations"
+                >
+                    <ChevronRight className="h-5 w-5" />
+                </button>
+            )}
+
+            {/* Chat Sidebar Expand Button (when both collapsed) */}
+            {chatSidebarCollapsed && patientSidebarCollapsed && (
+                <button
+                    onClick={() => setChatSidebarCollapsed(false)}
+                    className="fixed left-0 top-1/2 translate-y-12 z-30 bg-gradient-to-r from-emerald-600 to-blue-600 hover:from-emerald-500 hover:to-blue-500 text-white p-3 rounded-r-xl border border-l-0 border-emerald-500/50 transition-all duration-200 hover:scale-110 shadow-xl shadow-emerald-500/50 hover:shadow-2xl shadow-emerald-500/60"
+                    title="Show Conversations"
+                >
+                    <MessageSquare className="h-5 w-5" />
+                </button>
+            )}
+
+            {/* Chat Sidebar */}
+            <ChatSidebar
+                userId={userId}
+                currentChatId={currentChatId}
+                chats={chats}
+                collapsed={chatSidebarCollapsed}
+                onSelectChat={selectChat}
+                onNewChat={createNewChat}
+                onDeleteChat={deleteChat}
+                onToggleCollapse={() => setChatSidebarCollapsed(!chatSidebarCollapsed)}
+            />
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col">
                 {/* Header */}
                 <Header
-                    sessionId={sessionId}
+                    sessionId={currentChatId}
                     patientInfo={patientInfo}
                     isAnalyzing={isAnalyzing}
                     showPatientForm={showPatientForm}
@@ -554,57 +750,113 @@ export default function MedRAXPlatform() {
                 )}
 
                 {/* Main Content Area */}
-                <div className="flex-1 flex flex-col overflow-hidden">
-                    <div className="flex-1 flex overflow-hidden relative">
-                        {/* Left: Image Upload Sidebar - Only show when images exist */}
-                        {uploadedImages.length > 0 && (
-                            <div className={`transition-all duration-300 ease-in-out bg-gradient-to-br from-zinc-900/80 to-zinc-900/50 backdrop-blur-sm border-r border-zinc-800/50 flex flex-col ${leftSidebarCollapsed ? 'w-0' : 'w-80'} overflow-hidden`}>
-                                <div className="p-4 border-b border-zinc-800/50 flex items-center justify-between">
-                                    <h2 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
-                                        Medical Images
-                                    </h2>
-                                </div>
-
-                                <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                                    {uploadedImages.length === 0 ? (
-                                        <div className="text-center text-zinc-500 text-sm mt-8">
-                                            No images uploaded yet
-                                        </div>
-                                    ) : (
-                                        uploadedImages.map((img, idx) => (
-                                            <div
-                                                key={idx}
-                                                onClick={() => setCurrentImageIndex(idx)}
-                                                className={`relative cursor-pointer rounded-xl overflow-hidden border-2 transition-all duration-200 hover:scale-[1.02] ${idx === currentImageIndex
-                                                    ? 'border-blue-500 shadow-lg shadow-blue-500/20'
-                                                    : 'border-zinc-800/50 hover:border-zinc-700'
-                                                    }`}
-                                            >
-                                                <img
-                                                    src={`${API_BASE}/${img}`}
-                                                    alt={`Upload ${idx + 1}`}
-                                                    className="w-full h-32 object-cover"
-                                                />
-                                                {idx === currentImageIndex && (
-                                                    <div className="absolute top-2 right-2 px-2 py-1 bg-blue-500 text-white text-xs rounded-full font-semibold">
-                                                        Active
-                                                    </div>
-                                                )}
+                <div className="flex-1 flex overflow-hidden">
+                    {/* Left: Image Gallery Sidebar - Show when images exist */}
+                    {uploadedImages.length > 0 && (
+                        <>
+                            <div className={`transition-all duration-300 ease-in-out bg-gradient-to-b from-zinc-900 via-zinc-900/95 to-zinc-900/90 border-r border-zinc-800/50 flex flex-col shadow-xl ${imageSidebarCollapsed ? 'w-0' : 'w-72'} overflow-hidden`}>
+                                {/* Header with gradient accent */}
+                                <div className="relative p-4 border-b border-zinc-800/50 bg-gradient-to-r from-purple-900/20 via-zinc-900/50 to-pink-900/20">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20">
+                                                <Image className="h-4 w-4 text-purple-400" />
                                             </div>
-                                        ))
-                                    )}
+                                            <div>
+                                                <h2 className="text-sm font-bold text-white">Medical Images</h2>
+                                                <p className="text-xs text-zinc-500">{uploadedImages.length} image{uploadedImages.length !== 1 ? 's' : ''}</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => setImageSidebarCollapsed(true)}
+                                            className="p-2 hover:bg-zinc-800/50 rounded-lg text-zinc-400 hover:text-white transition-all duration-200 hover:scale-105"
+                                            title="Collapse sidebar"
+                                        >
+                                            <ChevronLeft className="h-4 w-4" />
+                                        </button>
+                                    </div>
                                 </div>
 
-                                <div className="p-4 border-t border-zinc-800">
-                                    <ImageUploadZone
-                                        dragActive={dragActive}
+                                {/* Image Gallery */}
+                                <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
+                                    <ImageGallery
+                                        images={uploadedImages}
+                                        currentIndex={currentImageIndex}
+                                        apiBase={API_BASE}
+                                        onSelectImage={setCurrentImageIndex}
+                                        onUploadClick={() => fileInputRef.current?.click()}
+                                    />
+                                </div>
+
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    multiple
+                                    accept="image/*,.dcm"
+                                    onChange={handleFileSelect}
+                                    className="hidden"
+                                />
+                            </div>
+
+                            {/* Expand button for image sidebar when collapsed */}
+                            {imageSidebarCollapsed && (
+                                <button
+                                    onClick={() => setImageSidebarCollapsed(false)}
+                                    className={`fixed top-1/2 -translate-y-1/2 z-10 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white p-3 rounded-r-xl border border-l-0 border-purple-500/50 transition-all duration-200 hover:scale-110 shadow-xl shadow-purple-500/50 hover:shadow-2xl hover:shadow-purple-500/60 ${patientSidebarCollapsed && chatSidebarCollapsed ? 'left-0' :
+                                        patientSidebarCollapsed ? 'left-64' :
+                                            chatSidebarCollapsed ? 'left-72' :
+                                                'left-[34rem]'
+                                        }`}
+                                    title="Show images"
+                                >
+                                    <Image className="h-5 w-5" />
+                                </button>
+                            )}
+                        </>
+                    )}
+
+                    {/* CENTER: Main Chat Interface (MAIN FOCUS) */}
+                    <div className="flex-1 flex flex-col bg-gradient-to-b from-zinc-950 to-zinc-900">
+                        {uploadedImages.length === 0 ? (
+                            /* Welcome Screen with Upload */
+                            <div className="flex items-center justify-center h-full">
+                                <div className="text-center max-w-2xl mx-auto p-6">
+                                    <div className="relative mb-8">
+                                        <div className="absolute inset-0 blur-3xl bg-blue-500/20"></div>
+                                        <Bot className="relative h-24 w-24 mx-auto text-blue-400" />
+                                    </div>
+                                    <h2 className="text-3xl font-bold mb-3 bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
+                                        Ready to Analyze
+                                    </h2>
+                                    <p className="text-zinc-400 mb-8">Upload medical images to begin AI-powered analysis</p>
+
+                                    {/* Large centered upload zone */}
+                                    <div
                                         onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
                                         onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
                                         onDragOver={(e) => e.preventDefault()}
                                         onDrop={handleDrop}
                                         onClick={() => fileInputRef.current?.click()}
-                                    />
+                                        className={`relative cursor-pointer border-2 border-dashed rounded-xl p-16 transition-all duration-300 ${dragActive
+                                            ? 'border-blue-500 bg-blue-500/10 scale-105'
+                                            : 'border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800/30'
+                                            }`}
+                                    >
+                                        <div className="flex flex-col items-center gap-4">
+                                            <div className="p-6 rounded-full bg-zinc-800/50">
+                                                <svg className="h-16 w-16 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <h3 className="text-xl font-semibold mb-2 text-white">Drop X-ray images here</h3>
+                                                <p className="text-zinc-400 text-sm">or click to browse</p>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs text-zinc-500">
+                                                <span>Supports DICOM, JPG, PNG</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <input
                                         ref={fileInputRef}
                                         type="file"
@@ -615,264 +867,158 @@ export default function MedRAXPlatform() {
                                     />
                                 </div>
                             </div>
-                        )}
+                        ) : (
+                            /* Chat Interface - Main Focus */
+                            <div className="flex-1 flex flex-col">
+                                {/* Chat Messages Area */}
+                                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                                    {messages.map((msg, idx) => (
+                                        <div key={idx} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''} animate-in slide-in-from-bottom-2 duration-300`}>
+                                            {/* Avatar */}
+                                            <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-lg ${msg.role === 'user'
+                                                ? 'bg-gradient-to-br from-blue-500 to-blue-700'
+                                                : msg.role === 'system'
+                                                    ? 'bg-gradient-to-br from-zinc-600 to-zinc-800'
+                                                    : 'bg-gradient-to-br from-emerald-500 to-emerald-700'
+                                                }`}>
+                                                {msg.role === 'user' ? '👤' : msg.role === 'system' ? '⚙️' : '🏥'}
+                                            </div>
 
-                        {/* Left Sidebar Collapse Button - Only show when images exist */}
-                        {uploadedImages.length > 0 && (
-                            <button
-                                onClick={() => setLeftSidebarCollapsed(!leftSidebarCollapsed)}
-                                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-zinc-800 hover:bg-zinc-700 text-white p-2 rounded-r-lg border border-l-0 border-zinc-700 transition-all duration-200 hover:scale-110 shadow-lg"
-                                style={{ left: leftSidebarCollapsed ? '0' : '320px' }}
-                            >
-                                {leftSidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-                            </button>
-                        )}
-
-                        {/* Center: Results or Upload */}
-                        <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-zinc-950 to-zinc-900">
-                            {uploadedImages.length === 0 ? (
-                                <div className="flex items-center justify-center h-full">
-                                    <div className="text-center max-w-2xl mx-auto">
-                                        <div className="relative mb-8">
-                                            <div className="absolute inset-0 blur-3xl bg-blue-500/20 rounded-full"></div>
-                                            <Bot className="relative h-24 w-24 mx-auto text-blue-400" />
-                                        </div>
-                                        <h2 className="text-3xl font-bold mb-3 bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
-                                            Ready to Analyze
-                                        </h2>
-                                        <p className="text-zinc-400 mb-8">Upload medical images to begin AI-powered analysis</p>
-
-                                        {/* Large centered upload zone */}
-                                        <div
-                                            onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
-                                            onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
-                                            onDragOver={(e) => e.preventDefault()}
-                                            onDrop={handleDrop}
-                                            onClick={() => fileInputRef.current?.click()}
-                                            className={`relative cursor-pointer border-2 border-dashed rounded-2xl p-16 transition-all duration-300 ${dragActive
-                                                ? 'border-blue-500 bg-blue-500/10 scale-105'
-                                                : 'border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800/30'
-                                                }`}
-                                        >
-                                            <div className="flex flex-col items-center gap-4">
-                                                <div className="p-6 rounded-full bg-zinc-800/50">
-                                                    <svg className="h-16 w-16 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                                    </svg>
+                                            {/* Message Content */}
+                                            <div className="flex-1 min-w-0 max-w-3xl">
+                                                <div
+                                                    className={`inline-block px-5 py-4 rounded-xl text-sm shadow-md ${msg.role === 'user'
+                                                        ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white'
+                                                        : msg.role === 'system'
+                                                            ? 'bg-zinc-800/80 backdrop-blur-sm text-zinc-300 border border-zinc-700/50'
+                                                            : 'bg-zinc-800/80 backdrop-blur-sm text-white border border-zinc-700/50'
+                                                        }`}
+                                                >
+                                                    <MessageRenderer
+                                                        content={msg.content}
+                                                        apiBase={API_BASE}
+                                                        onImageClick={(src, alt) => setModalImage({ src, alt })}
+                                                    />
                                                 </div>
-                                                <div>
-                                                    <h3 className="text-xl font-semibold mb-2 text-white">Drop X-ray images here</h3>
-                                                    <p className="text-zinc-400 text-sm">or click to browse</p>
-                                                </div>
-                                                <div className="flex items-center gap-2 text-xs text-zinc-500">
-                                                    <span>Supports DICOM, JPG, PNG</span>
+                                                <div className={`text-xs text-zinc-500 mt-1.5 ${msg.role === 'user' ? 'text-right' : ''}`}>
+                                                    {msg.timestamp.toLocaleTimeString()}
                                                 </div>
                                             </div>
                                         </div>
-                                        <input
-                                            ref={fileInputRef}
-                                            type="file"
-                                            multiple
-                                            accept="image/*,.dcm"
-                                            onChange={handleFileSelect}
-                                            className="hidden"
-                                        />
-                                    </div>
+                                    ))}
+                                    <div ref={messagesEndRef} />
                                 </div>
-                            ) : analysisResults.length === 0 && !isAnalyzing ? (
-                                <div className="flex flex-col items-center justify-center h-full">
-                                    <div className="relative mb-8 group">
-                                        <div className="absolute inset-0 bg-blue-500/10 blur-2xl rounded-lg group-hover:bg-blue-500/20 transition-all"></div>
-                                        <img
-                                            src={`${API_BASE}/${currentImage}`}
-                                            alt="Current X-ray"
-                                            className="relative max-w-md rounded-xl border-2 border-zinc-800/50 shadow-2xl group-hover:border-zinc-700/50 transition-all"
-                                        />
-                                    </div>
-                                    <button
-                                        onClick={runCompleteAnalysis}
-                                        disabled={isAnalyzing}
-                                        className="px-8 py-4 bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 rounded-xl font-semibold flex items-center gap-3 disabled:opacity-50 shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/40 transition-all duration-200 hover:scale-105"
-                                    >
-                                        {isAnalyzing ? (
-                                            <>
-                                                <Loader2 className="h-5 w-5 animate-spin" />
-                                                Analyzing...
-                                            </>
-                                        ) : (
-                                            <>
-                                                🔬 Run Complete Analysis
-                                            </>
-                                        )}
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="space-y-6">
-                                    {currentImage && (
-                                        <div className="text-center mb-8">
-                                            <h3 className="text-xs text-zinc-400 mb-3 uppercase tracking-wider font-semibold">Original Image</h3>
-                                            <div className="relative inline-block">
-                                                <div className="absolute inset-0 bg-blue-500/5 blur-xl rounded-xl"></div>
-                                                <img
-                                                    src={`${API_BASE}/${currentImage}`}
-                                                    alt="Original X-ray"
-                                                    className="relative max-w-md rounded-xl border-2 border-zinc-800/50 mx-auto shadow-xl"
-                                                />
-                                            </div>
+
+                                {/* Chat Input Area */}
+                                <div className="border-t border-zinc-800/50 bg-gradient-to-r from-zinc-900/95 to-zinc-900/80 backdrop-blur-sm p-4 space-y-3">
+                                    {/* Run Complete Analysis Button - Show when images uploaded but no analysis run */}
+                                    {uploadedImages.length > 0 && !isAnalyzing && (
+                                        <div className="max-w-4xl mx-auto">
+                                            <button
+                                                onClick={runCompleteAnalysis}
+                                                disabled={isAnalyzing || !currentChatId}
+                                                className="w-full px-6 py-4 bg-gradient-to-r from-emerald-600 via-blue-600 to-purple-600 hover:from-emerald-500 hover:via-blue-500 hover:to-purple-500 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/40 font-semibold flex items-center justify-center gap-2 text-white"
+                                            >
+                                                <Bot className="h-5 w-5" />
+                                                Run Complete AI Analysis
+                                                <span className="text-xs opacity-75">({uploadedImages.length} image{uploadedImages.length !== 1 ? 's' : ''})</span>
+                                            </button>
                                         </div>
                                     )}
 
-                                    <div className="flex items-center gap-3 mb-6">
-                                        <div className="flex-1 h-px bg-gradient-to-r from-transparent via-zinc-700 to-transparent"></div>
-                                        <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
-                                            Analysis Results
-                                        </h2>
-                                        <div className="flex-1 h-px bg-gradient-to-r from-transparent via-zinc-700 to-transparent"></div>
+                                    {/* Chat Input */}
+                                    <div className="max-w-4xl mx-auto flex gap-3 items-center">
+                                        <input
+                                            type="text"
+                                            value={inputMessage}
+                                            onChange={(e) => setInputMessage(e.target.value)}
+                                            onKeyPress={(e) => e.key === 'Enter' && !isLoading && sendMessage()}
+                                            placeholder="Ask about the analysis..."
+                                            className="flex-1 px-5 py-4 bg-zinc-800/50 border border-zinc-700/50 rounded-xl text-sm placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all backdrop-blur-sm"
+                                            disabled={isLoading || !currentChatId}
+                                        />
+                                        <button
+                                            onClick={sendMessage}
+                                            disabled={isLoading || !currentChatId || !inputMessage.trim()}
+                                            className="px-6 py-4 bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/40 font-semibold"
+                                        >
+                                            {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                                        </button>
                                     </div>
-
-                                    {analysisResults
-                                        .filter(([toolName, _]: [string, any]) => {
-                                            // Filter out pure utility tools
-                                            const isUtility = toolName.includes('visualizer') || toolName.includes('image_visualizer');
-                                            return !isUtility;
-                                        })
-                                        .map(([toolName, result]: [string, any], idx) => {
-                                            const isClassification = toolName.includes('classification') || toolName.includes('classifier');
-                                            const isSegmentation = toolName.includes('segmentation');
-                                            const isReport = toolName.includes('report');
-                                            const isGrounding = toolName.includes('grounding');
-                                            const isExpert = toolName.includes('expert') || toolName.includes('vqa');
-
-                                            const isCollapsed = collapsedTools.has(idx);
-
-                                            return (
-                                                <div key={idx} className="bg-gradient-to-br from-zinc-900/80 to-zinc-900/50 backdrop-blur-sm border border-zinc-800/50 rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 hover:border-zinc-700/50">
-                                                    <div
-                                                        onClick={() => toggleToolCollapse(idx)}
-                                                        className="flex items-center justify-between p-6 cursor-pointer hover:bg-zinc-800/30 transition-colors"
-                                                    >
-                                                        <h3 className="text-lg font-semibold flex items-center gap-3">
-                                                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                                                            {toolName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                                        </h3>
-                                                        <button className="p-1 hover:bg-zinc-700 rounded-lg transition-colors">
-                                                            {isCollapsed ? <ChevronDown className="h-5 w-5" /> : <ChevronUp className="h-5 w-5" />}
-                                                        </button>
-                                                    </div>
-
-                                                    {!isCollapsed && (
-                                                        <div className="px-6 pb-6"  >
-
-                                                            {isClassification && (
-                                                                <ClassificationResults
-                                                                    result={result}
-                                                                    idx={idx}
-                                                                    apiBase={API_BASE}
-                                                                />
-                                                            )}
-
-                                                            {isSegmentation && (
-                                                                <SegmentationResults
-                                                                    result={result}
-                                                                    idx={idx}
-                                                                    currentImage={currentImage}
-                                                                    apiBase={API_BASE}
-                                                                />
-                                                            )}
-
-                                                            {isReport && (
-                                                                <ReportResults
-                                                                    result={result}
-                                                                    idx={idx}
-                                                                />
-                                                            )}
-
-                                                            {isGrounding && (
-                                                                <GroundingResults
-                                                                    result={result}
-                                                                    idx={idx}
-                                                                    apiBase={API_BASE}
-                                                                />
-                                                            )}
-
-                                                            {isExpert && (
-                                                                <VQAResults
-                                                                    result={result}
-                                                                    idx={idx}
-                                                                />
-                                                            )}
-
-                                                            {!isClassification && !isSegmentation && !isReport && !isExpert && !isGrounding && (
-                                                                <div className="text-sm text-zinc-300">
-                                                                    {typeof result === 'string' ? result : JSON.stringify(result, null, 2)}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
                                 </div>
-                            )}
-                        </div>
-
-                        {/* Right: Chat / Tools Panel */}
-                        <div className={`h-full transition-all duration-300 ease-in-out ${rightSidebarCollapsed ? 'w-0' : 'w-96'} overflow-hidden`}>
-                            <ChatPanel
-                                sessionId={sessionId}
-                                messages={messages}
-                                inputMessage={inputMessage}
-                                isLoading={isLoading}
-                                rightSidebarMode={rightSidebarMode}
-                                apiBase={API_BASE}
-                                onInputChange={setInputMessage}
-                                onSendMessage={sendMessage}
-                                onClearChat={clearChat}
-                                onNewThread={newThread}
-                                onSetMode={setRightSidebarMode}
-                                onImageClick={(src, alt) => setModalImage({ src, alt })}
-                            />
-                        </div>
-
-                        {/* Right Sidebar Collapse Button */}
-                        <button
-                            onClick={() => setRightSidebarCollapsed(!rightSidebarCollapsed)}
-                            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-zinc-800 hover:bg-zinc-700 text-white p-2 rounded-l-lg border border-r-0 border-zinc-700 transition-all duration-200 hover:scale-110 shadow-lg"
-                            style={{ right: rightSidebarCollapsed ? '0' : '384px' }}
-                        >
-                            {rightSidebarCollapsed ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                        </button>
+                            </div>
+                        )}
                     </div>
 
-                    {/* Bottom Chat Input - Only show when chat sidebar is collapsed/in tools mode */}
-                    {(rightSidebarCollapsed || rightSidebarMode === 'tools') && (
-                        <div
-                            className="border-t border-zinc-800/50 bg-gradient-to-r from-zinc-900/95 to-zinc-900/80 backdrop-blur-sm transition-all duration-300"
-                            style={{
-                                marginRight: rightSidebarMode === 'tools' && !rightSidebarCollapsed ? '384px' : '0'
-                            }}
-                        >
-                            <div className="max-w-4xl mx-auto p-4">
-                                <div className="flex gap-3 items-center">
-                                    <input
-                                        type="text"
-                                        value={inputMessage}
-                                        onChange={(e) => setInputMessage(e.target.value)}
-                                        onKeyPress={(e) => e.key === 'Enter' && !isLoading && sendMessage()}
-                                        placeholder="Ask about the analysis..."
-                                        className="flex-1 px-5 py-4 bg-zinc-800/50 border border-zinc-700/50 rounded-2xl text-sm placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all backdrop-blur-sm"
-                                        disabled={isLoading || !sessionId}
-                                    />
+                    {/* RIGHT: Tool Output Panel / Tools Management */}
+                    <div className={`transition-all duration-300 ease-in-out border-l border-zinc-800/50 ${toolOutputCollapsed ? 'w-0' : 'w-96'} overflow-hidden`}>
+                        <div className="h-full flex flex-col bg-gradient-to-br from-zinc-900/80 to-zinc-900/50 backdrop-blur-sm">
+                            {/* Mode Switcher Header */}
+                            <div className="p-4 border-b border-zinc-800/50 bg-gradient-to-r from-emerald-900/10 via-zinc-900/50 to-blue-900/10">
+                                <div className="flex items-center gap-3 mb-3">
                                     <button
-                                        onClick={sendMessage}
-                                        disabled={isLoading || !sessionId || !inputMessage.trim()}
-                                        className="px-6 py-4 bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 rounded-2xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/40 font-semibold"
+                                        onClick={() => setToolOutputCollapsed(true)}
+                                        className="p-2 bg-gradient-to-br from-purple-600/10 to-pink-600/10 border border-purple-500/20 hover:from-purple-600/20 hover:to-pink-600/20 hover:border-purple-500/40 rounded-xl transition-all duration-300 shadow-lg hover:shadow-purple-500/20"
+                                        title="Collapse panel"
                                     >
-                                        {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <span className="text-xl">→</span>}
+                                        <ChevronRight className="h-4 w-4 text-purple-300" />
+                                    </button>
+                                    <h2 className="text-sm font-bold text-white flex items-center gap-2 flex-1">
+                                        <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-500/10 to-blue-500/10 border border-emerald-500/20">
+                                            <Settings className="h-4 w-4 text-emerald-400" />
+                                        </div>
+                                        Tools
+                                    </h2>
+                                </div>
+                                <div className="flex gap-2 bg-zinc-800/50 rounded-xl p-1.5 backdrop-blur-sm">
+                                    <button
+                                        onClick={() => setRightSidebarMode('results')}
+                                        className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 ${rightSidebarMode === 'results'
+                                            ? 'bg-gradient-to-r from-emerald-600 to-blue-600 text-white shadow-lg shadow-emerald-500/25'
+                                            : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-700/30'
+                                            }`}
+                                    >
+                                        Results
+                                    </button>
+                                    <button
+                                        onClick={() => setRightSidebarMode('management')}
+                                        className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 ${rightSidebarMode === 'management'
+                                            ? 'bg-gradient-to-r from-emerald-600 to-blue-600 text-white shadow-lg shadow-emerald-500/25'
+                                            : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-700/30'
+                                            }`}
+                                    >
+                                        <Settings className="h-3.5 w-3.5" />
+                                        Tools
                                     </button>
                                 </div>
                             </div>
+
+                            {/* Content Area */}
+                            <div className="flex-1 overflow-hidden">
+                                {rightSidebarMode === 'results' ? (
+                                    <ToolOutputPanel
+                                        analysisResults={analysisResults}
+                                        currentImage={currentImage}
+                                        collapsed={false} // Already controlled by parent
+                                        apiBase={API_BASE}
+                                        onToggleCollapse={() => { }} // Handled by parent
+                                    />
+                                ) : (
+                                    <ToolsPanel sessionId={currentChatId} />
+                                )}
+                            </div>
                         </div>
+                    </div>
+
+                    {/* Expand button for right sidebar when collapsed */}
+                    {toolOutputCollapsed && (
+                        <button
+                            onClick={() => setToolOutputCollapsed(false)}
+                            className="fixed right-0 top-1/2 -translate-y-1/2 z-20 bg-gradient-to-l from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 text-white p-3 rounded-l-xl border border-r-0 border-blue-500/50 transition-all duration-200 hover:scale-110 shadow-xl shadow-blue-500/50 hover:shadow-2xl hover:shadow-blue-500/60"
+                            title="Show Results"
+                        >
+                            <ChevronLeft className="h-5 w-5" />
+                        </button>
                     )}
                 </div>
 
