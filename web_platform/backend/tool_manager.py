@@ -3,13 +3,12 @@ Advanced Tool Manager for MedRAX Web Platform
 Handles dynamic loading, unloading, and management of all MedRAX tools
 """
 
-import os
-import sys
 import platform
-from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
+import sys
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 # Add MedRAX to path
 medrax_root = Path(__file__).parent.parent.parent
@@ -48,7 +47,7 @@ class ToolInfo:
 
 class ToolManager:
     """Manages dynamic loading and unloading of MedRAX tools"""
-    
+
     # Tool definitions with metadata
     TOOL_DEFINITIONS = {
         "image_visualizer": {
@@ -157,7 +156,7 @@ class ToolManager:
             "class_name": "RAGTool",
         },
     }
-    
+
     def __init__(self, device: str = "cpu", model_dir: str = "/model-weights", temp_dir: str = "temp"):
         """Initialize the tool manager"""
         self.device = device
@@ -166,10 +165,10 @@ class ToolManager:
         self.tools: Dict[str, ToolInfo] = {}
         self.is_mac = platform.system() == "Darwin"
         self.is_arm64 = platform.machine() == "arm64"
-        
+
         # Initialize tool registry
         self._initialize_registry()
-    
+
     def _initialize_registry(self):
         """Initialize the tool registry with availability checks"""
         for tool_id, definition in self.TOOL_DEFINITIONS.items():
@@ -186,12 +185,12 @@ class ToolManager:
                 else:
                     status = ToolStatus.UNAVAILABLE
                     error = f"Missing dependencies: {', '.join(definition['dependencies'])}"
-            
+
             # Check if model is cached
             is_cached = False
             if definition["requires_model"] and "model_id" in definition:
                 is_cached = self._is_model_cached(definition["model_id"])
-            
+
             self.tools[tool_id] = ToolInfo(
                 name=tool_id,
                 display_name=definition["display_name"],
@@ -206,36 +205,36 @@ class ToolManager:
                 instance=None,
                 is_cached=is_cached
             )
-    
+
     def _is_model_cached(self, model_id: str) -> bool:
         """Check if a HuggingFace model is already cached"""
         try:
-            from pathlib import Path
             import os
-            
+            from pathlib import Path
+
             # Get HuggingFace cache directory
             cache_home = os.environ.get("HF_HOME") or os.environ.get("XDG_CACHE_HOME")
             if cache_home:
                 cache_dir = Path(cache_home) / "hub"
             else:
                 cache_dir = Path.home() / ".cache" / "huggingface" / "hub"
-            
+
             # Model snapshot directory format: models--{org}--{model_name}
             model_dir_name = f"models--{model_id.replace('/', '--')}"
             model_path = cache_dir / model_dir_name
-            
+
             # Check if directory exists and has snapshots
             if model_path.exists():
                 snapshots_dir = model_path / "snapshots"
                 if snapshots_dir.exists() and any(snapshots_dir.iterdir()):
                     logger.debug("model_cached", model_id=model_id, path=str(model_path))
                     return True
-            
+
             return False
         except Exception as e:
             logger.warning("cache_check_error", model_id=model_id, error=str(e))
             return False
-    
+
     def _check_dependencies(self, dependencies: List[str]) -> bool:
         """Check if all dependencies are available"""
         for dep in dependencies:
@@ -244,7 +243,7 @@ class ToolManager:
             except ImportError:
                 return False
         return True
-    
+
     def get_all_tools(self) -> Dict[str, Dict[str, Any]]:
         """Get information about all tools"""
         return {
@@ -264,29 +263,29 @@ class ToolManager:
             }
             for tool_id, tool in self.tools.items()
         }
-    
+
     def load_tool(self, tool_id: str, **kwargs) -> Tuple[bool, Optional[str]]:
         """
         Load a specific tool
-        
+
         Returns:
             Tuple of (success: bool, error_message: Optional[str])
         """
         if tool_id not in self.tools:
             return False, f"Tool '{tool_id}' not found"
-        
+
         tool_info = self.tools[tool_id]
-        
+
         if tool_info.status == ToolStatus.UNAVAILABLE:
             return False, tool_info.error_message or "Tool unavailable"
-        
+
         if tool_info.instance is not None:
             return True, None  # Already loaded
-        
+
         try:
             # Import the specific tool class (avoid importing all tools)
             tool_class = None
-            
+
             if tool_id == "image_visualizer":
                 from medrax.tools.utils import ImageVisualizerTool
                 tool_class = ImageVisualizerTool
@@ -317,10 +316,10 @@ class ToolManager:
             elif tool_id == "medical_knowledge_rag":
                 from medrax.tools.rag import RAGTool
                 tool_class = RAGTool
-            
+
             if not tool_class:
                 return False, f"Tool class not found for '{tool_id}'"
-            
+
             # Initialize tool with appropriate parameters
             if tool_id in ["image_visualizer"]:
                 instance = tool_class()
@@ -361,57 +360,57 @@ class ToolManager:
                 return False, "RAG tool requires configuration (Cohere API key, etc.)"
             else:
                 instance = tool_class(**kwargs)
-            
+
             tool_info.instance = instance
             tool_info.status = ToolStatus.LOADED
             tool_info.is_cached = True  # Model is now cached after loading
             return True, None
-            
+
         except Exception as e:
             import traceback
             error_msg = f"Failed to load tool: {str(e)}\n{traceback.format_exc()}"
             tool_info.status = ToolStatus.ERROR
             tool_info.error_message = error_msg
             return False, error_msg
-    
+
     def unload_tool(self, tool_id: str) -> Tuple[bool, Optional[str]]:
         """
         Unload a specific tool to free memory
-        
+
         Returns:
             Tuple of (success: bool, error_message: Optional[str])
         """
         if tool_id not in self.tools:
             return False, f"Tool '{tool_id}' not found"
-        
+
         tool_info = self.tools[tool_id]
-        
+
         if tool_info.instance is None:
             return True, None  # Already unloaded
-        
+
         try:
             # Clear the instance
             del tool_info.instance
             tool_info.instance = None
             tool_info.status = ToolStatus.AVAILABLE
-            
+
             # Force garbage collection for large models
             import gc
             gc.collect()
-            
+
             # Clear CUDA cache if using GPU
             if self.device == "cuda":
                 try:
                     import torch
                     torch.cuda.empty_cache()
-                except:
+                except Exception:
                     pass
-            
+
             return True, None
-            
+
         except Exception as e:
             return False, f"Failed to unload tool: {str(e)}"
-    
+
     def get_loaded_tools(self) -> List[Any]:
         """Get list of loaded tool instances for agent"""
         return [
@@ -419,7 +418,7 @@ class ToolManager:
             for tool_info in self.tools.values()
             if tool_info.instance is not None
         ]
-    
+
     def get_loaded_tools_dict(self) -> Dict[str, Any]:
         """Get dictionary of loaded tool instances"""
         return {
@@ -427,7 +426,7 @@ class ToolManager:
             for tool_info in self.tools.values()
             if tool_info.instance is not None
         }
-    
+
     def load_default_tools(self) -> Dict[str, bool]:
         """Load default recommended tools"""
         default_tools = [
@@ -437,7 +436,7 @@ class ToolManager:
             "chest_xray_report",
             "chest_xray_expert",
         ]
-        
+
         results = {}
         for tool_id in default_tools:
             success, error = self.load_tool(tool_id)
@@ -446,9 +445,9 @@ class ToolManager:
                 logger.info("success", message=f"Loaded {tool_id}")
             else:
                 logger.error("error", message=f"Failed to load {tool_id}: {error}")
-        
+
         return results
-    
+
     def get_tool_recommendations(self) -> Dict[str, List[str]]:
         """Get tool recommendations based on system capabilities"""
         recommendations = {
@@ -457,12 +456,12 @@ class ToolManager:
             "advanced": [],
             "unavailable": []
         }
-        
+
         for tool_id, tool_info in self.tools.items():
             if tool_info.status == ToolStatus.UNAVAILABLE:
                 recommendations["unavailable"].append(tool_id)
             elif tool_info.model_size_gb > 5.0:
                 recommendations["advanced"].append(tool_id)
-        
+
         return recommendations
 

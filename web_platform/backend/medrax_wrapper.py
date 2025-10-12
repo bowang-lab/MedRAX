@@ -2,10 +2,8 @@
 Minimal MedRAX wrapper for web backend - loads only essential components
 """
 
-import os
 import sys
 from pathlib import Path
-from typing import Dict, List, Any, Tuple
 
 # Add MedRAX to path
 medrax_root = Path(__file__).parent.parent.parent
@@ -21,7 +19,7 @@ def create_mock_agent():
     class MockAgent:
         def __init__(self):
             self.workflow = MockWorkflow()
-    
+
     class MockWorkflow:
         def stream(self, messages, config):
             # Mock response for development
@@ -30,11 +28,11 @@ def create_mock_agent():
                     "messages": [MockMessage("Hello! This is a mock response. The MedRAX agent is not fully initialized yet.")]
                 }
             }
-    
+
     class MockMessage:
         def __init__(self, content):
             self.content = content
-    
+
     return MockAgent(), {"MockTool": "Available"}
 
 def initialize_medrax_agent(
@@ -55,26 +53,25 @@ def initialize_medrax_agent(
         # Try to import and initialize full MedRAX
         from dotenv import load_dotenv
         load_dotenv()
-        
+
         # Import MedRAX components (at top of function to avoid circular imports)
-        from langgraph.checkpoint.memory import MemorySaver
         from langchain_openai import ChatOpenAI
+        from langgraph.checkpoint.memory import MemorySaver
         from medrax.agent import Agent
-        from medrax.utils import load_prompts_from_file
-        
+
         # Import tools
         from medrax.tools import (
-            ImageVisualizerTool,
             ChestXRayClassifierTool,
-            ChestXRaySegmentationTool,
             ChestXRayReportGeneratorTool,
+            ChestXRaySegmentationTool,
+            DicomProcessorTool,
+            ImageVisualizerTool,
             XRayVQATool,
-            XRayPhraseGroundingTool,
-            DicomProcessorTool
         )
-        
+        from medrax.utils import load_prompts_from_file
+
         logger.info("success", message="MedRAX components imported successfully")
-        
+
         # Load prompts - fix path
         prompt_path = medrax_root / prompt_file
         if not prompt_path.exists():
@@ -83,14 +80,14 @@ def initialize_medrax_agent(
         else:
             prompts = load_prompts_from_file(str(prompt_path))
             prompt = prompts.get("MEDICAL_ASSISTANT", "You are a medical AI assistant.")
-        
+
         logger.info("message", text=f"📝 Using system prompt (length: {len(prompt)})")
-        
+
         # Initialize tools
         logger.info("message", text=f"🔧 Initializing tools on device: {device}")
         tools_list = []
         tools_dict = {}
-        
+
         try:
             logger.info("message", text="   Loading ImageVisualizerTool...")
             tool = ImageVisualizerTool()
@@ -99,7 +96,7 @@ def initialize_medrax_agent(
             logger.info("message", text=f"   ✅ {tool.name}")
         except Exception as e:
             logger.info("message", text=f"   ⚠️  ImageVisualizerTool failed: {e}")
-        
+
         try:
             logger.info("message", text="   Loading ChestXRayClassifierTool...")
             tool = ChestXRayClassifierTool(device=device)
@@ -108,7 +105,7 @@ def initialize_medrax_agent(
             logger.info("message", text=f"   ✅ {tool.name}")
         except Exception as e:
             logger.info("message", text=f"   ⚠️  ChestXRayClassifierTool failed: {e}")
-        
+
         try:
             logger.info("message", text="   Loading ChestXRaySegmentationTool...")
             tool = ChestXRaySegmentationTool(device=device)
@@ -117,7 +114,7 @@ def initialize_medrax_agent(
             logger.info("message", text=f"   ✅ {tool.name}")
         except Exception as e:
             logger.info("message", text=f"   ⚠️  ChestXRaySegmentationTool failed: {e}")
-        
+
         try:
             logger.info("message", text="   Loading XRayVQATool...")
             tool = XRayVQATool(device=device)
@@ -126,7 +123,7 @@ def initialize_medrax_agent(
             logger.info("message", text=f"   ✅ {tool.name}")
         except Exception as e:
             logger.info("message", text=f"   ⚠️  XRayVQATool failed: {e}")
-        
+
         try:
             logger.info("message", text="   Loading ChestXRayReportGeneratorTool...")
             tool = ChestXRayReportGeneratorTool(device=device)
@@ -135,7 +132,7 @@ def initialize_medrax_agent(
             logger.info("message", text=f"   ✅ {tool.name}")
         except Exception as e:
             logger.info("message", text=f"   ⚠️  ChestXRayReportGeneratorTool failed: {e}")
-        
+
         # Grounding tool disabled - requires MAIRA-2 model (very large, not available)
         # try:
         #     logger.info("message", text="   Loading XRayPhraseGroundingTool...")
@@ -145,7 +142,7 @@ def initialize_medrax_agent(
         #     logger.info("message", text=f"   ✅ {tool.name}")
         # except Exception as e:
         #     logger.info("message", text=f"   ⚠️  XRayPhraseGroundingTool failed: {e}")
-        
+
         try:
             logger.info("message", text="   Loading DicomProcessorTool...")
             tool = DicomProcessorTool()
@@ -154,22 +151,22 @@ def initialize_medrax_agent(
             logger.info("message", text=f"   ✅ {tool.name}")
         except Exception as e:
             logger.info("message", text=f"   ⚠️  DicomProcessorTool failed: {e}")
-        
+
         if not tools_list:
             logger.error("error", message="No tools loaded successfully, falling back to mock")
             return create_mock_agent()
-        
+
         logger.info("success", message=f"Loaded {len(tools_list)} tools successfully")
-        
+
         # Create agent
         checkpointer = MemorySaver()
         llm = ChatOpenAI(
-            model=model, 
-            temperature=temperature, 
-            top_p=top_p, 
+            model=model,
+            temperature=temperature,
+            top_p=top_p,
             **openai_kwargs
         )
-        
+
         agent = Agent(
             model=llm,
             tools=tools_list,
@@ -178,10 +175,10 @@ def initialize_medrax_agent(
             log_tools=True,
             log_dir=temp_dir
         )
-        
+
         logger.info("success", message="MedRAX agent initialized successfully with real tools!")
         return agent, tools_dict
-        
+
     except Exception as e:
         import traceback
         logger.error("error", message=f"Failed to initialize MedRAX agent: {e}")
@@ -192,7 +189,8 @@ def initialize_medrax_agent(
 def check_medrax_availability():
     """Check if MedRAX components are available"""
     try:
-        import medrax.agent
-        return True
+        import importlib.util
+        spec = importlib.util.find_spec("medrax.agent")
+        return spec is not None
     except ImportError:
         return False

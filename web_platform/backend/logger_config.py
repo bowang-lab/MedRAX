@@ -3,11 +3,12 @@ Centralized logging configuration for MedRAX Backend
 Uses structlog for structured logging with proper formatting
 """
 
-import sys
 import logging
-from pathlib import Path
-import structlog
+import sys
 from datetime import datetime
+from pathlib import Path
+
+import structlog
 
 # Create logs directory
 LOGS_DIR = Path("logs")
@@ -91,13 +92,13 @@ root_logger.setLevel(logging.INFO)  # Set to INFO for cleaner console output
 def get_logger(name: str = None) -> structlog.stdlib.BoundLogger:
     """
     Get a structured logger instance.
-    
+
     Args:
         name: Logger name (typically __name__)
-    
+
     Returns:
         Configured structlog logger
-    
+
     Usage:
         logger = get_logger(__name__)
         logger.info("session_created", session_id=sid, user="admin")
@@ -144,15 +145,15 @@ def log_error(error_type: str, message: str, **kwargs):
 # Example usage:
 if __name__ == "__main__":
     logger = get_logger("test")
-    
+
     logger.info("test_message", key="value", number=42)
     logger.warning("test_warning", reason="demonstration")
-    
+
     try:
         1 / 0
     except Exception as e:
         logger.error("test_error", error=str(e), exc_info=True)
-    
+
     log_tool_execution("test_tool", 123.45, True, image_path="temp/test.png")
     log_api_request("POST", "/api/test", 200, 45.2, session_id="test123")
 
