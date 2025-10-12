@@ -130,8 +130,12 @@ echo "   Tools with cached models appear as 'Available' (yellow)"
 echo "   Click the download icon in Tools panel to load them"
 echo ""
 
-# Start backend with uvicorn auto-reload (using explicit venv paths)
+# Initialize database
+echo "💾 Initializing database..."
 cd backend
+"$VENV_PYTHON" -c "from database import init_db; init_db()" 2>&1 | grep -E "(initialized|Error)" || echo "   ✅ Database ready"
+echo ""
 
+# Start backend with uvicorn auto-reload (using explicit venv paths)
 # Use Python to run uvicorn directly to ensure correct environment
 exec "$VENV_PYTHON" -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
