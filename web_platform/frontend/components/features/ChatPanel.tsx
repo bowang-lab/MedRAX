@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react';
 import { MessageSquare, Settings, Trash2, RefreshCw, Loader2 } from 'lucide-react';
-import MessageRenderer from './MessageRenderer';
+import MessageRenderer from '../ui/MessageRenderer';
 import ToolsPanel from './ToolsPanel';
 
 interface Message {
