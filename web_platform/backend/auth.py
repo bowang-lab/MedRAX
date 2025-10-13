@@ -62,12 +62,13 @@ class SimpleAuthManager:
                 return False, "Username already exists"
 
             # Create new user
+            # Note: Store as timezone-naive for SQLite compatibility
             password_hash = self._hash_password(password)
             user = AuthUser(
                 username=username,
                 password_hash=password_hash,
                 display_name=display_name or username,
-                created_at=datetime.now(timezone.utc)
+                created_at=datetime.now(timezone.utc).replace(tzinfo=None)
             )
             db.add(user)
             db.commit()
@@ -100,20 +101,22 @@ class SimpleAuthManager:
                 return False, None, "Invalid username or password"
 
             # Create session
+            # Note: Store as timezone-naive for SQLite compatibility
             token = self._generate_token()
-            expires_at = datetime.now(timezone.utc) + self.session_duration
+            now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+            expires_at = now_utc + self.session_duration
 
             session = AuthSession(
                 token=token,
                 username=username,
-                created_at=datetime.now(timezone.utc),
+                created_at=now_utc,
                 expires_at=expires_at,
-                last_activity=datetime.now(timezone.utc)
+                last_activity=now_utc
             )
             db.add(session)
 
             # Update last login
-            user.last_login = datetime.now(timezone.utc)
+            user.last_login = now_utc
 
             db.commit()
 
@@ -170,7 +173,9 @@ class SimpleAuthManager:
                 return None
 
             # Check if expired
-            now = datetime.now(timezone.utc)
+            # Note: Use timezone-naive datetime for SQLite compatibility
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            
             if now > session.expires_at:
                 # Delete expired session
                 db.delete(session)
@@ -238,7 +243,8 @@ class SimpleAuthManager:
         """
         db = self._get_db()
         try:
-            now = datetime.now(timezone.utc)
+            # Use timezone-naive datetime for SQLite compatibility
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
             expired = db.query(AuthSession).filter(AuthSession.expires_at < now).all()
             count = len(expired)
 
