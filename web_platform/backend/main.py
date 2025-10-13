@@ -29,6 +29,7 @@ from medrax.utils import load_prompts_from_file
 from pydantic import BaseModel
 
 # Local imports
+from auth import SimpleAuthManager, get_auth_manager
 from chat_interface import ChatInterface
 from logger_config import get_logger
 from session_manager import SessionManager, get_session_manager
@@ -89,6 +90,9 @@ global_checkpointer = None  # Will be MemorySaver or None
 # Use SessionManager instead of plain dict
 session_manager: SessionManager = get_session_manager()
 
+# Use AuthManager for user authentication
+auth_manager: SimpleAuthManager = get_auth_manager()
+
 # Request/Response models
 class ChatMessage(BaseModel):
     role: str
@@ -99,6 +103,15 @@ class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
     image_path: Optional[str] = None
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    display_name: Optional[str] = None
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 class ChatResponse(BaseModel):
     response: str
@@ -252,6 +265,94 @@ async def health():
         "agent_initialized": global_agent is not None,
         "available_tools": list(global_tools.keys()) if global_tools else [],
         "active_sessions": len(session_manager.sessions)  # Fixed: was agent_sessions
+    }
+
+# ========== Authentication Endpoints ==========
+
+@app.post("/api/auth/register")
+async def register(request: RegisterRequest):
+    """
+    Register a new user.
+    Simple registration - just username and password (no strength requirements).
+    """
+    success, message = auth_manager.register_user(
+        username=request.username,
+        password=request.password,
+        display_name=request.display_name
+    )
+    
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+    
+    logger.info("user_registered", username=request.username)
+    
+    return {
+        "success": True,
+        "message": message,
+        "username": request.username
+    }
+
+@app.post("/api/auth/login")
+async def login(request: LoginRequest):
+    """
+    Login user and get session token.
+    Returns token to be used in Authorization header for subsequent requests.
+    """
+    success, token, message = auth_manager.login(
+        username=request.username,
+        password=request.password
+    )
+    
+    if not success:
+        raise HTTPException(status_code=401, detail=message)
+    
+    user_info = auth_manager.get_user_info(request.username)
+    
+    logger.info("user_logged_in", username=request.username)
+    
+    return {
+        "success": True,
+        "message": message,
+        "token": token,
+        "user": user_info
+    }
+
+@app.post("/api/auth/logout")
+async def logout(token: str = Query(..., description="Session token")):
+    """Logout user by invalidating session token"""
+    success = auth_manager.logout(token)
+    
+    if not success:
+        raise HTTPException(status_code=400, detail="Invalid token")
+    
+    return {
+        "success": True,
+        "message": "Logged out successfully"
+    }
+
+@app.get("/api/auth/verify")
+async def verify_token(token: str = Query(..., description="Session token")):
+    """Verify if token is valid and return user info"""
+    user_id = auth_manager.verify_token(token)
+    
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    user_info = auth_manager.get_user_info(user_id)
+    
+    return {
+        "valid": True,
+        "user": user_info
+    }
+
+@app.get("/api/auth/users")
+async def list_users():
+    """List all registered users (admin endpoint)"""
+    users = auth_manager.list_users()
+    
+    return {
+        "users": users,
+        "count": len(users)
     }
 
 # LEGACY ENDPOINT REMOVED - Use POST /api/users/{user_id}/chats instead

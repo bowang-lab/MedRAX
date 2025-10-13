@@ -26,6 +26,7 @@ import ImageUploadZone from '../components/ui/ImageUploadZone';
 import AnalysisProgress from '../components/ui/AnalysisProgress';
 import PipelineVisualization from '../components/ui/PipelineVisualization';
 import MessageRenderer from '../components/ui/MessageRenderer';
+import LoginPage from '../components/features/LoginPage';
 import { getAllSessions, saveSession, getSession, SessionData } from '../lib/sessionStorage';
 
 const API_BASE = 'http://localhost:8000';
@@ -44,6 +45,11 @@ interface PatientInfo {
 }
 
 export default function MedRAXPlatform() {
+    // Authentication state (MUST be at top before any early returns)
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [authToken, setAuthToken] = useState<string | null>(null);
+    const [currentUser, setCurrentUser] = useState<any>(null);
+    
     // Generate initial userId only once on mount
     const [initialUserIdGenerated] = useState(() => `user-${Date.now()}`);
 
@@ -704,6 +710,54 @@ export default function MedRAXPlatform() {
             document.removeEventListener('mouseup', handleMouseUp);
         };
     }, [isResizing, patientSidebarCollapsed, chatSidebarCollapsed, patientSidebarWidth, chatSidebarWidth]);
+
+    // Check for existing auth on mount
+    useEffect(() => {
+        const token = localStorage.getItem('medrax_token');
+        const user = localStorage.getItem('medrax_user');
+        
+        if (token && user) {
+            // Verify token is still valid
+            axios.get(`${API_BASE}/api/auth/verify?token=${token}`)
+                .then(response => {
+                    setAuthToken(token);
+                    setCurrentUser(JSON.parse(user));
+                    setIsAuthenticated(true);
+                    setUserId(JSON.parse(user).user_id);
+                })
+                .catch(() => {
+                    // Token invalid, clear storage
+                    localStorage.removeItem('medrax_token');
+                    localStorage.removeItem('medrax_user');
+                });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    
+    const handleLoginSuccess = (token: string, user: any) => {
+        setAuthToken(token);
+        setCurrentUser(user);
+        setIsAuthenticated(true);
+        setUserId(user.user_id);
+    };
+    
+    const handleLogout = () => {
+        if (authToken) {
+            axios.post(`${API_BASE}/api/auth/logout?token=${authToken}`)
+                .catch(err => console.error('Logout error:', err));
+        }
+        
+        localStorage.removeItem('medrax_token');
+        localStorage.removeItem('medrax_user');
+        setAuthToken(null);
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+    };
+    
+    // Show login page if not authenticated
+    if (!isAuthenticated) {
+        return <LoginPage onLoginSuccess={handleLoginSuccess} apiBase={API_BASE} />;
+    }
 
     return (
         <div className="h-screen flex bg-zinc-950 text-white" style={{ cursor: isResizing ? 'col-resize' : 'default' }}>
