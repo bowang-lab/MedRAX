@@ -40,8 +40,15 @@ class ChatInterface:
         self.uploaded_files = []  # List of uploaded file paths
         self.display_files = []   # List of display file paths
         self.display_file_path = None  # For compatibility with image visualizer
-        self.latest_tool_results = {}  # Store latest tool execution results
+        
+        # NEW: Tool execution history (list of all executions)
+        self.tool_execution_history = []  # List of {execution_id, timestamp, tool_name, image_paths, result, metadata, request_id}
+        
+        # KEEP: Latest results for backward compatibility
+        self.latest_tool_results = {}  # Store latest tool execution results per tool
+        
         self.last_tool_calls = []  # Track tool calls from last message
+        self.current_request_id = None  # Track current analysis request
 
         # Message history storage
         self.message_history = []  # List of {role, content, timestamp} dicts
@@ -107,6 +114,12 @@ class ChatInterface:
             message: The user message to process
             display_image: (Deprecated) Image path - uses self.uploaded_files instead
         """
+        import uuid
+        from datetime import datetime, timezone
+        
+        # Generate unique request ID for this analysis
+        self.current_request_id = str(uuid.uuid4())
+        
         # Initialize thread if needed
         if not self.current_thread_id:
             self.current_thread_id = str(time.time())
@@ -205,33 +218,49 @@ class ChatInterface:
 
                             # Store the tool result
                             if tool_result:
+                                result_data = None
+                                metadata_data = {}
+                                
                                 # If parsing failed and we got a string, try to extract the tuple manually
                                 if isinstance(tool_result, str) and tool_result.startswith("(") and ", {" in tool_result:
                                     logger.warning("warning", message=f"{tool_name} result is a string, storing as-is")
-                                    # Store the string as result - frontend will show it for debugging
-                                    self.latest_tool_results[tool_name] = {
-                                        "result": tool_result,
-                                        "metadata": {}
-                                    }
+                                    result_data = tool_result
+                                    metadata_data = {}
                                 # Parse result and metadata if it's a tuple
                                 elif isinstance(tool_result, tuple) and len(tool_result) >= 2:
-                                    result_data, metadata = tool_result[0], tool_result[1]
-                                    self.latest_tool_results[tool_name] = {
-                                        "result": result_data,
-                                        "metadata": metadata
-                                    }
-                                    logger.info("success", message=f"Stored {tool_name} result: {type(result_data).__name__} with {len(metadata)} metadata fields")
+                                    result_data, metadata_data = tool_result[0], tool_result[1]
+                                    logger.info("success", message=f"Stored {tool_name} result: {type(result_data).__name__} with {len(metadata_data)} metadata fields")
                                 elif isinstance(tool_result, dict):
                                     # Some tools return just a dict
-                                    self.latest_tool_results[tool_name] = {
-                                        "result": tool_result,
-                                        "metadata": {}
-                                    }
+                                    result_data = tool_result
+                                    metadata_data = {}
                                 else:
-                                    self.latest_tool_results[tool_name] = {
-                                        "result": tool_result,
-                                        "metadata": {}
-                                    }
+                                    result_data = tool_result
+                                    metadata_data = {}
+                                
+                                # Store in latest_tool_results (backward compatibility)
+                                self.latest_tool_results[tool_name] = {
+                                    "result": result_data,
+                                    "metadata": metadata_data
+                                }
+                                
+                                # NEW: Append to execution history
+                                execution_record = {
+                                    "execution_id": str(uuid.uuid4()),
+                                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                                    "request_id": self.current_request_id,
+                                    "tool_name": tool_name,
+                                    "image_paths": self.uploaded_files.copy(),  # Snapshot of images at execution
+                                    "result": result_data,
+                                    "metadata": metadata_data
+                                }
+                                self.tool_execution_history.append(execution_record)
+                                
+                                logger.info("tool_execution_stored",
+                                          execution_id=execution_record["execution_id"][:8],
+                                          tool_name=tool_name,
+                                          request_id=self.current_request_id[:8],
+                                          image_count=len(self.uploaded_files))
 
                                 # Track this tool call
                                 self.last_tool_calls.append({
@@ -293,6 +322,50 @@ class ChatInterface:
     def get_message_history(self) -> list:
         """Get the message history for this chat."""
         return self.message_history
+    
+    def get_tool_execution_history(
+        self, 
+        filter_by_image: Optional[str] = None,
+        filter_by_request: Optional[str] = None,
+        latest_only: bool = False
+    ) -> list:
+        """
+        Get tool execution history with optional filtering.
+        
+        Args:
+            filter_by_image: Only return executions that used this image path
+            filter_by_request: Only return executions from this request_id
+            latest_only: Only return the latest execution per tool
+            
+        Returns:
+            List of execution records matching the filters
+        """
+        history = self.tool_execution_history
+        
+        # Filter by image if specified
+        if filter_by_image:
+            history = [
+                exec_record for exec_record in history
+                if filter_by_image in exec_record.get("image_paths", [])
+            ]
+        
+        # Filter by request if specified
+        if filter_by_request:
+            history = [
+                exec_record for exec_record in history
+                if exec_record.get("request_id") == filter_by_request
+            ]
+        
+        # If latest_only, keep only the most recent execution per tool
+        if latest_only:
+            latest_by_tool = {}
+            for exec_record in reversed(history):  # Reverse to get latest first
+                tool_name = exec_record["tool_name"]
+                if tool_name not in latest_by_tool:
+                    latest_by_tool[tool_name] = exec_record
+            history = list(latest_by_tool.values())
+        
+        return history
 
     def clear_images(self) -> None:
         """Clear all uploaded images from this chat."""

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Image as ImageIcon, X, Eye, Upload } from 'lucide-react';
+import { Image as ImageIcon, X, Upload } from 'lucide-react';
 
 interface ImageGalleryProps {
     images: string[];
@@ -40,15 +40,30 @@ export default function ImageGallery({
 
     return (
         <div className="space-y-3">
-            {/* Image counter */}
-            <div className="flex items-center justify-between px-1">
-                <span className="text-xs text-zinc-500 font-medium">
-                    {images.length} image{images.length !== 1 ? 's' : ''}
-                </span>
-                {currentIndex !== null && (
-                    <span className="text-xs text-blue-400 font-medium">
-                        Viewing {currentIndex + 1} of {images.length}
+            {/* Image counter and analysis info */}
+            <div className="px-1 space-y-2">
+                <div className="flex items-center justify-between">
+                    <span className="text-xs text-zinc-500 font-medium">
+                        {images.length} image{images.length !== 1 ? 's' : ''}
                     </span>
+                    {currentIndex !== null && (
+                        <span className="text-xs text-blue-400 font-medium">
+                            Viewing {currentIndex + 1} of {images.length}
+                        </span>
+                    )}
+                </div>
+                
+                {/* Multi-image analysis indicator */}
+                {images.length > 1 && (
+                    <div className="px-3 py-2 bg-gradient-to-r from-emerald-900/30 to-blue-900/30 border border-emerald-500/20 rounded-lg">
+                        <p className="text-xs text-emerald-300 font-medium flex items-center gap-2">
+                            <span className="flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            </span>
+                            All {images.length} images will be analyzed together
+                        </p>
+                    </div>
                 )}
             </div>
 
@@ -70,14 +85,6 @@ export default function ImageGallery({
                             alt={`Upload ${idx + 1}`}
                             className="w-full h-32 object-cover"
                         />
-
-                        {/* Active indicator */}
-                        {idx === currentIndex && (
-                            <div className="absolute top-2 right-2 px-2 py-1 bg-blue-500 text-white text-xs rounded-full font-semibold flex items-center gap-1">
-                                <Eye className="h-3 w-3" />
-                                Active
-                            </div>
-                        )}
 
                         {/* Delete button on hover */}
                         {hoveredIndex === idx && onDeleteImage && idx !== currentIndex && (

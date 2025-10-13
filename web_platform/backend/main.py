@@ -541,24 +541,49 @@ async def send_chat_message(user_id: str, chat_id: str, request: ChatRequest):
         raise HTTPException(status_code=500, detail=f"Error processing message: {str(e)}")
 
 @app.get("/api/users/{user_id}/chats/{chat_id}/stream")
-async def stream_chat_analysis(user_id: str, chat_id: str, image_path: str = Query(...)):
-    """Stream analysis results for a specific chat using Server-Sent Events"""
+async def stream_chat_analysis(user_id: str, chat_id: str):
+    """
+    Stream comprehensive analysis results for ALL images in the chat using Server-Sent Events.
+    
+    This endpoint analyzes ALL uploaded images in the chat session, not just one.
+    The analysis includes:
+    - Pathology classification for each image
+    - Anatomical segmentation
+    - Detailed radiology report generation
+    - Visual question answering capabilities
+    """
     chat_interface = session_manager.get_chat(user_id, chat_id)
     if not chat_interface:
         raise HTTPException(status_code=404, detail="Chat not found")
+    
+    # Check if images are uploaded
+    if not chat_interface.uploaded_files:
+        raise HTTPException(status_code=400, detail="No images uploaded for analysis")
 
     async def event_generator():
         try:
-            # Send initial status
-            yield f"event: status\ndata: {json.dumps({'type': 'status', 'message': '🤖 Starting AI analysis...'})}\n\n"
+            # Send initial status with image count
+            image_count = len(chat_interface.uploaded_files)
+            yield f"event: status\ndata: {json.dumps({'type': 'status', 'message': f'🤖 Starting AI analysis of {image_count} image(s)...'})}\n\n"
             await asyncio.sleep(0.1)  # Small delay to ensure message is sent
 
-            # Process the message (empty message triggers analysis with uploaded images)
+            # Process the message with a comprehensive prompt
             responses = []
+            analysis_prompt = f"""Please perform a comprehensive medical analysis on all {image_count} uploaded chest X-ray image(s).
+
+For each image, provide:
+1. **Pathology Classification**: Identify and quantify any abnormalities (pneumonia, atelectasis, consolidation, edema, etc.)
+2. **Anatomical Segmentation**: Identify and segment key anatomical structures (lungs, heart, etc.)
+3. **Detailed Findings**: Describe notable findings, their locations, and clinical significance
+4. **Comparative Analysis**: If multiple images are present, compare and contrast findings across images
+5. **Clinical Impression**: Provide an overall clinical assessment and recommendations
+
+Use all available diagnostic tools to provide the most thorough analysis possible."""
+
             try:
                 async for response in chat_interface.process_message(
-                    "Please analyze these medical images comprehensively.",
-                    image_path
+                    analysis_prompt,
+                    None  # display_image parameter is deprecated, uses self.uploaded_files
                 ):
                     # Parse tool events
                     if response.startswith("__TOOL_START__"):
@@ -619,6 +644,55 @@ async def get_chat_analysis_results(user_id: str, chat_id: str):
         "chat_id": chat_id,
         "user_id": user_id,
         "count": len(results)
+    }
+
+@app.get("/api/users/{user_id}/chats/{chat_id}/tool-history")
+async def get_tool_execution_history(
+    user_id: str, 
+    chat_id: str,
+    filter_by_image: Optional[str] = Query(None, description="Filter by image path"),
+    filter_by_request: Optional[str] = Query(None, description="Filter by request ID"),
+    latest_only: bool = Query(False, description="Return only latest execution per tool")
+):
+    """
+    Get full tool execution history for a chat with optional filtering.
+    
+    Supports three filtering modes:
+    - latest_only=true: Show only the most recent execution per tool
+    - filter_by_request=<request_id>: Show only executions from a specific analysis request
+    - filter_by_image=<image_path>: Show only executions that used a specific image
+    
+    Returns a list of all tool executions with timestamps, image_paths, and results.
+    """
+    chat_interface = session_manager.get_chat(user_id, chat_id)
+    if not chat_interface:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    
+    # Get filtered history
+    history = chat_interface.get_tool_execution_history(
+        filter_by_image=filter_by_image,
+        filter_by_request=filter_by_request,
+        latest_only=latest_only
+    )
+    
+    # Ensure JSON serializable
+    serialized_history = [ensure_json_serializable(record) for record in history]
+    
+    logger.info("tool_history_fetched",
+               chat_id=chat_id[:8],
+               total_executions=len(serialized_history),
+               filter_image=filter_by_image is not None,
+               filter_request=filter_by_request is not None,
+               latest_only=latest_only)
+    
+    return {
+        "history": serialized_history,
+        "count": len(serialized_history),
+        "filters": {
+            "image": filter_by_image,
+            "request": filter_by_request,
+            "latest_only": latest_only
+        }
     }
 
 @app.delete("/api/users/{user_id}/chats/{chat_id}")

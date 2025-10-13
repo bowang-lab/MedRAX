@@ -60,6 +60,9 @@ export default function MedRAXPlatform() {
     const [dragActive, setDragActive] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisResults, setAnalysisResults] = useState<any[]>([]);
+    const [toolHistory, setToolHistory] = useState<any[]>([]);  // Full tool execution history
+    const [toolFilterMode, setToolFilterMode] = useState<'latest' | 'all' | 'request'>('latest');  // Filtering mode
+    const [currentRequestId, setCurrentRequestId] = useState<string | null>(null);  // Track latest request ID
 
     // Collapsible states - Updated for new layout
     const [patientSidebarCollapsed, setPatientSidebarCollapsed] = useState(false);
@@ -416,7 +419,7 @@ export default function MedRAXPlatform() {
     };
 
     const runCompleteAnalysis = async () => {
-        if (!currentChatId || !currentImage || isAnalyzing) return;
+        if (!currentChatId || uploadedImages.length === 0 || isAnalyzing) return;
 
         // Auto-open tool output panel to show results
         if (toolOutputCollapsed) {
@@ -424,19 +427,25 @@ export default function MedRAXPlatform() {
         }
 
         setIsAnalyzing(true);
+        
+        // Show which images are being analyzed
+        const imageCountMsg = uploadedImages.length === 1 
+            ? '1 image' 
+            : `${uploadedImages.length} images`;
+        
         setMessages(prev => [...prev, {
             role: 'system',
-            content: '🤖 Starting comprehensive AI analysis...',
+            content: `🤖 Starting comprehensive AI analysis of **${imageCountMsg}**...\n\n📊 This will analyze ALL uploaded images together and provide:\n- Pathology classification\n- Anatomical segmentation\n- Detailed radiology report\n- Clinical recommendations`,
             timestamp: new Date()
         }]);
 
         // Clear previous logs
         setBackendLogs([]);
-        setBackendLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Starting analysis...`]);
+        setBackendLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Starting analysis of ${imageCountMsg}...`]);
 
         try {
-            // Use chat-specific streaming endpoint
-            const streamUrl = `${API_BASE}/api/users/${userId}/chats/${currentChatId}/stream?image_path=${encodeURIComponent(currentImage)}`;
+            // Use chat-specific streaming endpoint (analyzes ALL images in the chat)
+            const streamUrl = `${API_BASE}/api/users/${userId}/chats/${currentChatId}/stream`;
 
             const eventSource = new EventSource(streamUrl);
 
@@ -457,17 +466,31 @@ export default function MedRAXPlatform() {
                 if (data.type === 'done' || data.type === 'error') {
                     eventSource.close();
 
-                    // Fetch final results
+                    // Fetch final results (both latest and history)
                     const resultsUrl = `${API_BASE}/api/users/${userId}/chats/${currentChatId}/results`;
+                    const historyUrl = `${API_BASE}/api/users/${userId}/chats/${currentChatId}/tool-history`;
 
-                    axios.get(resultsUrl)
-                        .then(resultsResponse => {
+                    // Fetch both latest results and full history
+                    Promise.all([
+                        axios.get(resultsUrl),
+                        axios.get(historyUrl)
+                    ]).then(([resultsResponse, historyResponse]) => {
                             console.log('✅ Analysis results received:', resultsResponse.data);
                             const results = resultsResponse.data.results || {};
                             console.log('📊 Results count:', Object.keys(results).length);
                             console.log('🔧 Tool names:', Object.keys(results));
 
                             setAnalysisResults(Object.entries(results));
+                            
+                            // Store full history
+                            const history = historyResponse.data.history || [];
+                            setToolHistory(history);
+                            console.log('📜 Tool history loaded:', history.length, 'executions');
+                            
+                            // Track the latest request ID
+                            if (history.length > 0) {
+                                setCurrentRequestId(history[history.length - 1].request_id);
+                            }
 
                             // Format and add summary message to chat
                             let summaryMessage = '### 📊 Analysis Complete\n\n';
@@ -1001,60 +1024,64 @@ export default function MedRAXPlatform() {
                             />
                             <div className="flex-1 transition-all duration-300 ease-in-out border-l border-zinc-800/50 overflow-hidden">
                                 <div className="h-full flex flex-col bg-gradient-to-br from-zinc-900/80 to-zinc-900/50 backdrop-blur-sm">
-                            {/* Mode Switcher Header */}
-                            <div className="p-4 border-b border-zinc-800/50 bg-gradient-to-r from-emerald-900/10 via-zinc-900/50 to-blue-900/10">
-                                <div className="flex items-center gap-3 mb-3">
-                                    <button
-                                        onClick={() => setToolOutputCollapsed(true)}
-                                        className="p-2 bg-gradient-to-br from-purple-600/10 to-pink-600/10 border border-purple-500/20 hover:from-purple-600/20 hover:to-pink-600/20 hover:border-purple-500/40 rounded-xl transition-all duration-300 shadow-lg hover:shadow-purple-500/20"
-                                        title="Collapse panel"
-                                    >
-                                        <ChevronRight className="h-4 w-4 text-purple-300" />
-                                    </button>
-                                    <h2 className="text-sm font-bold text-white flex items-center gap-2 flex-1">
-                                        <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-500/10 to-blue-500/10 border border-emerald-500/20">
-                                            <Settings className="h-4 w-4 text-emerald-400" />
+                                    {/* Mode Switcher Header */}
+                                    <div className="p-4 border-b border-zinc-800/50 bg-gradient-to-r from-emerald-900/10 via-zinc-900/50 to-blue-900/10">
+                                        <div className="flex items-center gap-3 mb-3">
+                                            <button
+                                                onClick={() => setToolOutputCollapsed(true)}
+                                                className="p-2 bg-gradient-to-br from-purple-600/10 to-pink-600/10 border border-purple-500/20 hover:from-purple-600/20 hover:to-pink-600/20 hover:border-purple-500/40 rounded-xl transition-all duration-300 shadow-lg hover:shadow-purple-500/20"
+                                                title="Collapse panel"
+                                            >
+                                                <ChevronRight className="h-4 w-4 text-purple-300" />
+                                            </button>
+                                            <h2 className="text-sm font-bold text-white flex items-center gap-2 flex-1">
+                                                <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-500/10 to-blue-500/10 border border-emerald-500/20">
+                                                    <Settings className="h-4 w-4 text-emerald-400" />
+                                                </div>
+                                                Tools
+                                            </h2>
                                         </div>
-                                        Tools
-                                    </h2>
-                                </div>
-                                <div className="flex gap-2 bg-zinc-800/50 rounded-xl p-1.5 backdrop-blur-sm">
-                                    <button
-                                        onClick={() => setRightSidebarMode('results')}
-                                        className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 ${rightSidebarMode === 'results'
-                                            ? 'bg-gradient-to-r from-emerald-600 to-blue-600 text-white shadow-lg shadow-emerald-500/25'
-                                            : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-700/30'
-                                            }`}
-                                    >
-                                        Results
-                                    </button>
-                                    <button
-                                        onClick={() => setRightSidebarMode('management')}
-                                        className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 ${rightSidebarMode === 'management'
-                                            ? 'bg-gradient-to-r from-emerald-600 to-blue-600 text-white shadow-lg shadow-emerald-500/25'
-                                            : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-700/30'
-                                            }`}
-                                    >
-                                        <Settings className="h-3.5 w-3.5" />
-                                        Tools
-                                    </button>
-                                </div>
-                            </div>
+                                        <div className="flex gap-2 bg-zinc-800/50 rounded-xl p-1.5 backdrop-blur-sm">
+                                            <button
+                                                onClick={() => setRightSidebarMode('results')}
+                                                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 ${rightSidebarMode === 'results'
+                                                    ? 'bg-gradient-to-r from-emerald-600 to-blue-600 text-white shadow-lg shadow-emerald-500/25'
+                                                    : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-700/30'
+                                                    }`}
+                                            >
+                                                Results
+                                            </button>
+                                            <button
+                                                onClick={() => setRightSidebarMode('management')}
+                                                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 ${rightSidebarMode === 'management'
+                                                    ? 'bg-gradient-to-r from-emerald-600 to-blue-600 text-white shadow-lg shadow-emerald-500/25'
+                                                    : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-700/30'
+                                                    }`}
+                                            >
+                                                <Settings className="h-3.5 w-3.5" />
+                                                Tools
+                                            </button>
+                                        </div>
+                                    </div>
 
-                            {/* Content Area */}
-                            <div className="flex-1 overflow-hidden">
-                                {rightSidebarMode === 'results' ? (
-                                    <ToolOutputPanel
-                                        analysisResults={analysisResults}
-                                        currentImage={currentImage}
-                                        collapsed={false} // Already controlled by parent
-                                        apiBase={API_BASE}
-                                        onToggleCollapse={() => { }} // Handled by parent
-                                    />
-                                ) : (
-                                    <ToolsPanel />
-                                )}
-                            </div>
+                                    {/* Content Area */}
+                                    <div className="flex-1 overflow-hidden">
+                                        {rightSidebarMode === 'results' ? (
+                                            <ToolOutputPanel
+                                                analysisResults={analysisResults}
+                                                toolHistory={toolHistory}
+                                                filterMode={toolFilterMode}
+                                                onFilterModeChange={setToolFilterMode}
+                                                currentRequestId={currentRequestId}
+                                                currentImage={currentImage}
+                                                collapsed={false} // Already controlled by parent
+                                                apiBase={API_BASE}
+                                                onToggleCollapse={() => { }} // Handled by parent
+                                            />
+                                        ) : (
+                                            <ToolsPanel />
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>

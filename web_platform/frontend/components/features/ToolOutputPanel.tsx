@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Settings, ChevronDown, ChevronUp } from 'lucide-react';
+import { Settings, ChevronDown, ChevronUp, Filter, Clock, Layers } from 'lucide-react';
 import ClassificationResults from './ClassificationResults';
 import SegmentationResults from './SegmentationResults';
 import ReportResults from './ReportResults';
@@ -10,6 +10,10 @@ import VQAResults from './VQAResults';
 
 interface ToolOutputPanelProps {
     analysisResults: any[];
+    toolHistory: any[];
+    filterMode: 'latest' | 'all' | 'request';
+    onFilterModeChange: (mode: 'latest' | 'all' | 'request') => void;
+    currentRequestId: string | null;
     currentImage: string | null;
     collapsed: boolean;
     apiBase: string;
@@ -18,6 +22,10 @@ interface ToolOutputPanelProps {
 
 export default function ToolOutputPanel({
     analysisResults,
+    toolHistory,
+    filterMode,
+    onFilterModeChange,
+    currentRequestId,
     currentImage,
     collapsed,
     apiBase,
@@ -35,25 +43,95 @@ export default function ToolOutputPanel({
         setCollapsedTools(newCollapsed);
     };
 
-    // Filter out image_visualizer tool
-    const filteredResults = analysisResults.filter(([toolName, _]: [string, any]) => {
-        const isUtility = toolName.includes('visualizer') || toolName.includes('image_visualizer');
-        return !isUtility;
-    });
+    // Determine which results to show based on filter mode
+    let displayResults: any[] = [];
+    
+    if (filterMode === 'latest') {
+        // Show only latest execution per tool (from analysisResults)
+        displayResults = analysisResults.filter(([toolName, _]: [string, any]) => {
+            const isUtility = toolName.includes('visualizer') || toolName.includes('image_visualizer');
+            return !isUtility;
+        });
+    } else if (filterMode === 'all') {
+        // Show all tool executions from history
+        const allExecutions = toolHistory.filter((exec: any) => {
+            const isUtility = exec.tool_name.includes('visualizer') || exec.tool_name.includes('image_visualizer');
+            return !isUtility;
+        });
+        // Convert to [toolName, result] format
+        displayResults = allExecutions.map((exec: any) => [
+            `${exec.tool_name} (${new Date(exec.timestamp).toLocaleTimeString()})`,
+            { result: exec.result, metadata: exec.metadata, execution_id: exec.execution_id, timestamp: exec.timestamp, image_paths: exec.image_paths }
+        ]);
+    } else if (filterMode === 'request' && currentRequestId) {
+        // Show only executions from the current request
+        const requestExecutions = toolHistory.filter((exec: any) => {
+            const isUtility = exec.tool_name.includes('visualizer') || exec.tool_name.includes('image_visualizer');
+            return !isUtility && exec.request_id === currentRequestId;
+        });
+        displayResults = requestExecutions.map((exec: any) => [
+            exec.tool_name,
+            { result: exec.result, metadata: exec.metadata, execution_id: exec.execution_id, timestamp: exec.timestamp, image_paths: exec.image_paths }
+        ]);
+    }
+    
+    const filteredResults = displayResults;
 
     return (
         <div className="h-full flex flex-col overflow-hidden">
-            {/* Header - Removed collapse button as it's handled by parent */}
-            <div className="p-4 border-b border-zinc-800/50">
+            {/* Header with filter mode selector */}
+            <div className="p-4 border-b border-zinc-800/50 space-y-3">
                 <div className="flex items-center justify-between">
                     <h2 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
                         <Settings className="h-4 w-4 text-emerald-400" />
                         Analysis Results
                     </h2>
                 </div>
+                
+                {/* Filter Mode Selector */}
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => onFilterModeChange('latest')}
+                        className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 flex items-center justify-center gap-1.5 ${
+                            filterMode === 'latest'
+                                ? 'bg-gradient-to-r from-emerald-600 to-blue-600 text-white shadow-lg'
+                                : 'bg-zinc-800/50 text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800'
+                        }`}
+                        title="Show only the latest execution per tool"
+                    >
+                        <Clock className="h-3.5 w-3.5" />
+                        Latest
+                    </button>
+                    <button
+                        onClick={() => onFilterModeChange('request')}
+                        className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 flex items-center justify-center gap-1.5 ${
+                            filterMode === 'request'
+                                ? 'bg-gradient-to-r from-emerald-600 to-blue-600 text-white shadow-lg'
+                                : 'bg-zinc-800/50 text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800'
+                        }`}
+                        title="Show only results from the current analysis request"
+                    >
+                        <Filter className="h-3.5 w-3.5" />
+                        Request
+                    </button>
+                    <button
+                        onClick={() => onFilterModeChange('all')}
+                        className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 flex items-center justify-center gap-1.5 ${
+                            filterMode === 'all'
+                                ? 'bg-gradient-to-r from-emerald-600 to-blue-600 text-white shadow-lg'
+                                : 'bg-zinc-800/50 text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800'
+                        }`}
+                        title="Show all tool executions with timestamps"
+                    >
+                        <Layers className="h-3.5 w-3.5" />
+                        All
+                    </button>
+                </div>
+                
                 {filteredResults.length > 0 && (
-                    <div className="mt-2 text-xs text-zinc-500">
-                        {filteredResults.length} tool{filteredResults.length !== 1 ? 's' : ''} executed
+                    <div className="text-xs text-zinc-500">
+                        Showing {filteredResults.length} result{filteredResults.length !== 1 ? 's' : ''}
+                        {filterMode === 'all' && ` (${toolHistory.length} total executions)`}
                     </div>
                 )}
             </div>
