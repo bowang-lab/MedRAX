@@ -6,7 +6,16 @@ Provides persistent storage for users, chats, messages, images, and tool results
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, String, Text, create_engine
+from sqlalchemy import (
+    JSON,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    create_engine,
+)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 
@@ -23,6 +32,34 @@ Base = declarative_base()
 
 
 # Models
+class AuthUser(Base):
+    """Authenticated user (doctor/clinician) model"""
+    __tablename__ = "auth_users"
+
+    username = Column(String, primary_key=True, index=True)
+    password_hash = Column(String, nullable=False)
+    display_name = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    last_login = Column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    sessions = relationship("AuthSession", back_populates="user", cascade="all, delete-orphan")
+
+
+class AuthSession(Base):
+    """User session/token model"""
+    __tablename__ = "auth_sessions"
+
+    token = Column(String, primary_key=True, index=True)
+    username = Column(String, ForeignKey("auth_users.username", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    last_activity = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    user = relationship("AuthUser", back_populates="sessions")
+
+
 class User(Base):
     """User/Patient model"""
     __tablename__ = "users"

@@ -1,15 +1,16 @@
 """
-Simple authentication system for MedRAX Web Platform
-No complex security - just username/password for user identification
+Database-backed authentication system for MedRAX Web Platform
+Simple username/password auth with persistent sessions
 """
 
 import hashlib
-import json
 import secrets
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import Dict, Optional
+from typing import List, Optional
 
+from sqlalchemy.orm import Session
+
+from database import AuthSession, AuthUser, SessionLocal
 from logger_config import get_logger
 
 logger = get_logger(__name__)
@@ -17,214 +18,248 @@ logger = get_logger(__name__)
 
 class SimpleAuthManager:
     """
-    Super simple authentication manager.
-    Stores users in JSON file, uses basic password hashing.
+    Simple authentication manager with database persistence.
+    - Users stored in database (auth_users table)
+    - Sessions/tokens stored in database (auth_sessions table)
+    - 30-day session duration for internal use
+    - Basic password hashing with SHA256
     
-    NOTE: This is intentionally simple. For production with sensitive data,
-    consider using proper authentication (OAuth, JWT, etc.)
+    NOTE: This is intentionally simple for internal use.
+    For production with sensitive data, use proper auth (OAuth, bcrypt, etc.)
     """
-    
-    def __init__(self, users_file: str = "users.json"):
-        self.users_file = Path(users_file)
-        self.users: Dict[str, Dict] = {}
-        self.sessions: Dict[str, Dict] = {}  # token -> {user_id, expires_at}
-        self.session_duration = timedelta(hours=24)  # 24 hour sessions
-        
-        # Load existing users
-        self._load_users()
-        
-        logger.info("auth_initialized", users_count=len(self.users))
-    
-    def _load_users(self):
-        """Load users from JSON file"""
-        if self.users_file.exists():
-            try:
-                with open(self.users_file, 'r') as f:
-                    self.users = json.load(f)
-                logger.info("users_loaded", count=len(self.users))
-            except Exception as e:
-                logger.error("users_load_error", error=str(e))
-                self.users = {}
-        else:
-            self.users = {}
-            self._save_users()
-    
-    def _save_users(self):
-        """Save users to JSON file"""
-        try:
-            with open(self.users_file, 'w') as f:
-                json.dump(self.users, f, indent=2)
-            logger.info("users_saved", count=len(self.users))
-        except Exception as e:
-            logger.error("users_save_error", error=str(e))
-    
+
+    def __init__(self, session_duration_days: int = 30):
+        self.session_duration = timedelta(days=session_duration_days)
+        logger.info("auth_initialized", session_duration_days=session_duration_days)
+
+    def _get_db(self) -> Session:
+        """Get database session"""
+        return SessionLocal()
+
     def _hash_password(self, password: str) -> str:
-        """Simple password hashing using SHA256"""
+        """Simple SHA256 password hashing"""
         return hashlib.sha256(password.encode()).hexdigest()
-    
-    def register_user(self, username: str, password: str, display_name: str = "") -> tuple[bool, str]:
+
+    def _generate_token(self) -> str:
+        """Generate secure random token"""
+        return secrets.token_urlsafe(32)
+
+    def register_user(
+        self,
+        username: str,
+        password: str,
+        display_name: Optional[str] = None
+    ) -> tuple[bool, str]:
         """
-        Register a new user.
-        
-        Args:
-            username: Unique username (will be user_id)
-            password: Any password (no strength requirements)
-            display_name: Optional display name
-            
-        Returns:
-            (success: bool, message: str)
+        Register a new user
+        Returns: (success, message)
         """
-        # Validate username
-        if not username or len(username) < 3:
-            return False, "Username must be at least 3 characters"
-        
-        if username in self.users:
-            return False, "Username already exists"
-        
-        # Create user
-        self.users[username] = {
-            "user_id": username,
-            "password_hash": self._hash_password(password),
-            "display_name": display_name or username,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "last_login": None
-        }
-        
-        self._save_users()
-        logger.info("user_registered", username=username)
-        
-        return True, "User registered successfully"
-    
+        db = self._get_db()
+        try:
+            # Check if user exists
+            existing = db.query(AuthUser).filter(AuthUser.username == username).first()
+            if existing:
+                return False, "Username already exists"
+
+            # Create new user
+            password_hash = self._hash_password(password)
+            user = AuthUser(
+                username=username,
+                password_hash=password_hash,
+                display_name=display_name or username,
+                created_at=datetime.now(timezone.utc)
+            )
+            db.add(user)
+            db.commit()
+
+            logger.info("user_registered", username=username)
+            return True, "User registered successfully"
+
+        except Exception as e:
+            db.rollback()
+            logger.error("register_error", username=username, error=str(e))
+            return False, f"Registration failed: {str(e)}"
+        finally:
+            db.close()
+
     def login(self, username: str, password: str) -> tuple[bool, Optional[str], str]:
         """
-        Login user and create session token.
-        
-        Args:
-            username: Username
-            password: Password
-            
-        Returns:
-            (success: bool, token: Optional[str], message: str)
+        Authenticate user and create session
+        Returns: (success, token, message)
         """
-        # Check if user exists
-        if username not in self.users:
-            logger.warning("login_failed", username=username, reason="user_not_found")
-            return False, None, "Invalid username or password"
-        
-        user = self.users[username]
-        
-        # Verify password
-        password_hash = self._hash_password(password)
-        if password_hash != user["password_hash"]:
-            logger.warning("login_failed", username=username, reason="wrong_password")
-            return False, None, "Invalid username or password"
-        
-        # Create session token
-        token = secrets.token_urlsafe(32)
-        expires_at = datetime.now(timezone.utc) + self.session_duration
-        
-        self.sessions[token] = {
-            "user_id": username,
-            "expires_at": expires_at.isoformat(),
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        
-        # Update last login
-        user["last_login"] = datetime.now(timezone.utc).isoformat()
-        self._save_users()
-        
-        logger.info("user_logged_in", username=username, token=token[:8])
-        
-        return True, token, "Login successful"
-    
+        db = self._get_db()
+        try:
+            # Find user
+            user = db.query(AuthUser).filter(AuthUser.username == username).first()
+            if not user:
+                return False, None, "Invalid username or password"
+
+            # Verify password
+            password_hash = self._hash_password(password)
+            if user.password_hash != password_hash:
+                return False, None, "Invalid username or password"
+
+            # Create session
+            token = self._generate_token()
+            expires_at = datetime.now(timezone.utc) + self.session_duration
+
+            session = AuthSession(
+                token=token,
+                username=username,
+                created_at=datetime.now(timezone.utc),
+                expires_at=expires_at,
+                last_activity=datetime.now(timezone.utc)
+            )
+            db.add(session)
+
+            # Update last login
+            user.last_login = datetime.now(timezone.utc)
+
+            db.commit()
+
+            logger.info(
+                "user_logged_in",
+                username=username,
+                token=token[:8],
+                expires_in_days=(expires_at - datetime.now(timezone.utc)).days
+            )
+            return True, token, "Login successful"
+
+        except Exception as e:
+            db.rollback()
+            logger.error("login_error", username=username, error=str(e))
+            return False, None, f"Login failed: {str(e)}"
+        finally:
+            db.close()
+
     def logout(self, token: str) -> bool:
         """
-        Logout user by removing session token.
-        
-        Args:
-            token: Session token
-            
-        Returns:
-            success: bool
+        Logout user by deleting session
+        Returns: success
         """
-        if token in self.sessions:
-            user_id = self.sessions[token]["user_id"]
-            del self.sessions[token]
-            logger.info("user_logged_out", user_id=user_id, token=token[:8])
-            return True
-        return False
-    
+        db = self._get_db()
+        try:
+            session = db.query(AuthSession).filter(AuthSession.token == token).first()
+            if session:
+                username = session.username
+                db.delete(session)
+                db.commit()
+                logger.info("user_logged_out", username=username, token=token[:8])
+                return True
+            return False
+        except Exception as e:
+            db.rollback()
+            logger.error("logout_error", token=token[:8], error=str(e))
+            return False
+        finally:
+            db.close()
+
     def verify_token(self, token: str) -> Optional[str]:
         """
-        Verify session token and return user_id.
-        
-        Args:
-            token: Session token
-            
-        Returns:
-            user_id if valid, None if invalid/expired
+        Verify token and return username if valid
+        Also updates last_activity timestamp
+        Returns: username or None
         """
-        if token not in self.sessions:
+        if not token:
             return None
-        
-        session = self.sessions[token]
-        expires_at = datetime.fromisoformat(session["expires_at"])
-        
-        # Check if expired
-        if datetime.now(timezone.utc) > expires_at:
-            del self.sessions[token]
-            logger.info("session_expired", token=token[:8])
+
+        db = self._get_db()
+        try:
+            session = db.query(AuthSession).filter(AuthSession.token == token).first()
+            if not session:
+                return None
+
+            # Check if expired
+            now = datetime.now(timezone.utc)
+            if now > session.expires_at:
+                # Delete expired session
+                db.delete(session)
+                db.commit()
+                logger.info("session_expired", token=token[:8])
+                return None
+
+            # Update last activity
+            session.last_activity = now
+            db.commit()
+
+            return session.username
+
+        except Exception as e:
+            logger.error("verify_token_error", token=token[:8], error=str(e))
             return None
-        
-        return session["user_id"]
-    
-    def get_user_info(self, username: str) -> Optional[Dict]:
+        finally:
+            db.close()
+
+    def get_user_info(self, identifier: str) -> Optional[dict]:
         """
-        Get user information (without password hash).
-        
-        Args:
-            username: Username
-            
-        Returns:
-            User info dict or None
+        Get user info by username
+        Returns: user dict or None
         """
-        if username not in self.users:
+        db = self._get_db()
+        try:
+            user = db.query(AuthUser).filter(AuthUser.username == identifier).first()
+            if user:
+                return {
+                    "user_id": user.username,
+                    "username": user.username,
+                    "display_name": user.display_name,
+                    "created_at": user.created_at.isoformat() if user.created_at else None,
+                    "last_login": user.last_login.isoformat() if user.last_login else None
+                }
             return None
-        
-        user = self.users[username].copy()
-        user.pop("password_hash", None)  # Don't expose password hash
-        return user
-    
-    def cleanup_expired_sessions(self):
-        """Remove expired sessions"""
-        now = datetime.now(timezone.utc)
-        expired = []
-        
-        for token, session in self.sessions.items():
-            expires_at = datetime.fromisoformat(session["expires_at"])
-            if now > expires_at:
-                expired.append(token)
-        
-        for token in expired:
-            del self.sessions[token]
-        
-        if expired:
-            logger.info("sessions_cleaned", count=len(expired))
-    
-    def list_users(self) -> list:
-        """List all users (admin function)"""
-        return [
-            {
-                "user_id": user["user_id"],
-                "display_name": user["display_name"],
-                "created_at": user["created_at"],
-                "last_login": user["last_login"]
-            }
-            for user in self.users.values()
-        ]
+        finally:
+            db.close()
+
+    def list_users(self) -> List[dict]:
+        """
+        List all registered users
+        Returns: list of user dicts
+        """
+        db = self._get_db()
+        try:
+            users = db.query(AuthUser).all()
+            return [
+                {
+                    "user_id": u.username,
+                    "username": u.username,
+                    "display_name": u.display_name,
+                    "created_at": u.created_at.isoformat() if u.created_at else None,
+                    "last_login": u.last_login.isoformat() if u.last_login else None
+                }
+                for u in users
+            ]
+        finally:
+            db.close()
+
+    def cleanup_expired_sessions(self) -> int:
+        """
+        Delete all expired sessions
+        Returns: number of sessions deleted
+        """
+        db = self._get_db()
+        try:
+            now = datetime.now(timezone.utc)
+            expired = db.query(AuthSession).filter(AuthSession.expires_at < now).all()
+            count = len(expired)
+
+            for session in expired:
+                db.delete(session)
+
+            db.commit()
+
+            if count > 0:
+                logger.info("expired_sessions_cleaned", count=count)
+
+            return count
+        except Exception as e:
+            db.rollback()
+            logger.error("cleanup_error", error=str(e))
+            return 0
+        finally:
+            db.close()
 
 
-# Global auth manager instance
+# Global instance
 _auth_manager: Optional[SimpleAuthManager] = None
 
 
@@ -232,6 +267,16 @@ def get_auth_manager() -> SimpleAuthManager:
     """Get or create global auth manager instance"""
     global _auth_manager
     if _auth_manager is None:
-        _auth_manager = SimpleAuthManager()
-    return _auth_manager
+        _auth_manager = SimpleAuthManager(session_duration_days=30)
 
+        # Create default test user if no users exist
+        db = SessionLocal()
+        try:
+            user_count = db.query(AuthUser).count()
+            if user_count == 0:
+                _auth_manager.register_user("testuser", "testpass", "Test User")
+                logger.info("default_user_created", username="testuser")
+        finally:
+            db.close()
+
+    return _auth_manager
