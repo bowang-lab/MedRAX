@@ -44,7 +44,7 @@ export default function Header({
                         </button>
                         {sessionId && (
                             <div className="text-xs text-zinc-500">
-                                Session: {sessionId.slice(0, 8)}
+                                Chat: {sessionId.slice(0, 8)}
                             </div>
                         )}
                         <div className={`px-3 py-1 rounded-full text-xs font-medium ${isAnalyzing ? 'bg-yellow-900 text-yellow-300' : 'bg-green-900 text-green-300'}`}>

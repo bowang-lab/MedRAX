@@ -169,7 +169,7 @@ export default function ChatPanel({
             {/* Tools Mode */}
             {rightSidebarMode === 'tools' && (
                 <div className="flex-1 flex flex-col overflow-hidden">
-                    <ToolsPanel sessionId={sessionId} />
+                    <ToolsPanel />
                 </div>
             )}
         </div>

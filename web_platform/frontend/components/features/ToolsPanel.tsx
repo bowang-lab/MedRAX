@@ -19,9 +19,8 @@ interface Tool {
     is_cached: boolean;
 }
 
-interface ToolsPanelProps {
-    sessionId: string | null;
-}
+// ToolsPanel is session-independent - all tool operations work globally
+// No need for sessionId prop as tools are managed at the system level
 
 const categoryColors = {
     utility: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
@@ -39,7 +38,7 @@ const categoryIcons = {
     knowledge: '📚',
 };
 
-export default function ToolsPanel({ sessionId }: ToolsPanelProps) {
+export default function ToolsPanel() {
     const [tools, setTools] = useState<Record<string, Tool>>({});
     const [loadingTools, setLoadingTools] = useState<Set<string>>(new Set());
     const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set());
@@ -129,8 +128,8 @@ export default function ToolsPanel({ sessionId }: ToolsPanelProps) {
     };
 
     const runSelectedTools = async () => {
-        if (!sessionId || selectedTools.size === 0) return;
-        // TODO: Implement running selected tools
+        if (selectedTools.size === 0) return;
+        // TODO: Implement running selected tools (currently tools are run automatically by agent)
         alert(`Would run ${selectedTools.size} tools (implementation pending)`);
     };
 
@@ -328,7 +327,7 @@ export default function ToolsPanel({ sessionId }: ToolsPanelProps) {
             <div className="p-4 border-t border-zinc-800 bg-zinc-900">
                 <button
                     onClick={runSelectedTools}
-                    disabled={selectedTools.size === 0 || !sessionId}
+                    disabled={selectedTools.size === 0}
                     className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-700 disabled:text-zinc-500 rounded-lg text-sm font-medium transition-colors"
                 >
                     {selectedTools.size > 0

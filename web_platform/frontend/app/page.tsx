@@ -51,7 +51,6 @@ export default function MedRAXPlatform() {
     const [userId, setUserId] = useState<string>(initialUserIdGenerated);
     const [currentChatId, setCurrentChatId] = useState<string | null>(null);
     const [chats, setChats] = useState<any[]>([]);
-    const [sessionId, setSessionId] = useState<string | null>(null); // Legacy support
 
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputMessage, setInputMessage] = useState('');
@@ -289,58 +288,10 @@ export default function MedRAXPlatform() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userId, uploadedImages.length, analysisResults.length, messages.length, patientInfo.name, patientInfo.age, patientInfo.gender, patientInfo.notes]);
 
-    const createSession = async (): Promise<string | null> => {
-        try {
-            const response = await axios.post(`${API_BASE}/api/sessions`);
-            setSessionId(response.data.session_id);
-            console.log('✅ Session created:', response.data.session_id);
-            return response.data.session_id;
-        } catch (error: any) {
-            console.error('Failed to create session:', error);
-            return null;
-        }
-    };
-
-    const clearChat = async () => {
-        if (!sessionId) return;
-
-        try {
-            await axios.post(`${API_BASE}/api/sessions/${sessionId}/clear`);
-            setMessages([]);
-            setUploadedImages([]);
-            setCurrentImageIndex(0);
-            setAnalysisResults([]);
-            console.log('✅ Chat cleared');
-
-            // Add system message
-            setMessages([{
-                role: 'system',
-                content: '🧹 Chat cleared. Session preserved. Upload new images to continue.',
-                timestamp: new Date()
-            }]);
-        } catch (error: any) {
-            console.error('Failed to clear chat:', error);
-        }
-    };
-
-    const newThread = async () => {
-        if (!sessionId) return;
-
-        try {
-            const response = await axios.post(`${API_BASE}/api/sessions/${sessionId}/new-thread`);
-            setMessages([]);
-            console.log('✅ New conversation thread started:', response.data.thread_id);
-
-            // Add system message
-            setMessages([{
-                role: 'system',
-                content: '🔄 New conversation started. Previous context cleared.',
-                timestamp: new Date()
-            }]);
-        } catch (error: any) {
-            console.error('Failed to start new thread:', error);
-        }
-    };
+    // Legacy functions removed - functionality replaced by:
+    // - createSession() → createNewChat() (creates chat under current userId)
+    // - clearChat() → createNewChat() (new chat = fresh context)
+    // - newThread() → createNewChat() (new chat = new conversation)
 
     const loadSession = async (savedSession: SessionData) => {
         console.log('Loading patient session:', savedSession);
@@ -462,10 +413,8 @@ export default function MedRAXPlatform() {
         setBackendLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Starting analysis...`]);
 
         try {
-            // Use the new chat-specific streaming endpoint (or fall back to legacy)
-            const streamUrl = currentChatId
-                ? `${API_BASE}/api/users/${userId}/chats/${currentChatId}/stream?image_path=${encodeURIComponent(currentImage)}`
-                : `${API_BASE}/api/chat/${sessionId}/stream?image_path=${encodeURIComponent(currentImage)}`;
+            // Use chat-specific streaming endpoint
+            const streamUrl = `${API_BASE}/api/users/${userId}/chats/${currentChatId}/stream?image_path=${encodeURIComponent(currentImage)}`;
 
             const eventSource = new EventSource(streamUrl);
 
@@ -486,10 +435,8 @@ export default function MedRAXPlatform() {
                 if (data.type === 'done' || data.type === 'error') {
                     eventSource.close();
 
-                    // Fetch final results (use appropriate endpoint based on architecture)
-                    const resultsUrl = currentChatId
-                        ? `${API_BASE}/api/users/${userId}/chats/${currentChatId}/results`
-                        : `${API_BASE}/api/analysis/${sessionId}`;
+                    // Fetch final results
+                    const resultsUrl = `${API_BASE}/api/users/${userId}/chats/${currentChatId}/results`;
                     
                     axios.get(resultsUrl)
                         .then(resultsResponse => {
@@ -625,7 +572,7 @@ export default function MedRAXPlatform() {
 
             // Fetch updated results after each message (tools might have been called)
             try {
-                const resultsResponse = await axios.get(`${API_BASE}/api/analysis/${currentChatId}`);
+                const resultsResponse = await axios.get(`${API_BASE}/api/users/${userId}/chats/${currentChatId}/results`);
                 if (resultsResponse.data.results && Object.keys(resultsResponse.data.results).length > 0) {
                     setAnalysisResults(Object.entries(resultsResponse.data.results));
                     setBackendLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 📊 Results updated: ${Object.keys(resultsResponse.data.results).length} tools`]);
@@ -736,7 +683,7 @@ export default function MedRAXPlatform() {
             <div className="flex-1 flex flex-col">
                 {/* Header */}
                 <Header
-                    sessionId={currentChatId}
+                    sessionId={currentChatId}  // Note: renamed to chatId would be better but keeping for component compatibility
                     patientInfo={patientInfo}
                     isAnalyzing={isAnalyzing}
                     showPatientForm={showPatientForm}
@@ -1007,7 +954,7 @@ export default function MedRAXPlatform() {
                                         onToggleCollapse={() => { }} // Handled by parent
                                     />
                                 ) : (
-                                    <ToolsPanel sessionId={currentChatId} />
+                                    <ToolsPanel />
                                 )}
                             </div>
                         </div>
