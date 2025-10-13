@@ -124,7 +124,7 @@ class SimpleAuthManager:
                 "user_logged_in",
                 username=username,
                 token=token[:8],
-                expires_in_days=(expires_at - datetime.now(timezone.utc)).days
+                expires_in_days=(expires_at - now_utc).days
             )
             return True, token, "Login successful"
 
