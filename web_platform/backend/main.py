@@ -24,22 +24,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from langchain_openai import ChatOpenAI
+from medrax.agent import Agent
+from medrax.utils import load_prompts_from_file
 from pydantic import BaseModel
-from sse_starlette.sse import EventSourceResponse
 
 # Local imports
 from chat_interface import ChatInterface
 from logger_config import get_logger
-from medrax.agent import Agent
-from medrax.utils import load_prompts_from_file
 from session_manager import SessionManager, get_session_manager
 from tool_manager import ToolManager
 from utils import (
     cleanup_old_files as util_cleanup_old_files,
+)
+from utils import (
     ensure_json_serializable,
     sanitize_filename,
     validate_chat_message,
-    validate_image_path,
 )
 
 # Configure environment variables for ML libraries
@@ -259,280 +259,32 @@ async def health():
 # New: POST /api/users/{user_id}/chats → creates chat under specific user
 
 # LEGACY ENDPOINT REMOVED - Create new chat instead (automatic fresh context)
-# Old: POST /api/sessions/{id}/clear → cleared messages but kept session  
+# Old: POST /api/sessions/{id}/clear → cleared messages but kept session
 # New: POST /api/users/{uid}/chats → new chat = fresh context
 
 # LEGACY ENDPOINT REMOVED - Create new chat instead
 # Old: POST /api/sessions/{id}/new-thread → new thread in same session
 # New: POST /api/users/{uid}/chats → new chat = new thread
 
-@app.post("/api/upload/{session_id}")
-async def upload_file(session_id: str, file: UploadFile = File(...)):
-    """Upload medical image or DICOM file"""
-    session = session_manager.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+# LEGACY ENDPOINT REMOVED - Use POST /api/users/{uid}/chats/{cid}/upload instead
+# Old: POST /api/upload/{session_id} → uploaded to session
+# New: POST /api/users/{uid}/chats/{cid}/upload → uploads to specific chat
 
-    try:
-        # Validate and sanitize filename
-        if not file.filename:
-            raise HTTPException(status_code=400, detail="Filename cannot be empty")
+# LEGACY ENDPOINT REMOVED - Use POST /api/users/{uid}/chats/{cid}/messages instead
+# Old: POST /api/chat/{session_id} → sent message to session
+# New: POST /api/users/{uid}/chats/{cid}/messages → sends to specific chat
 
-        safe_filename = sanitize_filename(file.filename)
-        if not safe_filename or safe_filename.startswith('.'):
-            raise HTTPException(status_code=400, detail="Invalid filename")
+# LEGACY ENDPOINT REMOVED - Use GET /api/users/{uid}/chats/{cid}/stream instead
+# Old: GET /api/chat/{session_id}/stream → streamed session analysis
+# New: GET /api/users/{uid}/chats/{cid}/stream → streams chat analysis
 
-        # Validate file type
-        allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.dcm'}
-        file_ext = Path(safe_filename).suffix.lower()
-        if file_ext not in allowed_extensions:
-            raise HTTPException(status_code=400, detail=f"File type {file_ext} not allowed. Allowed types: {', '.join(allowed_extensions)}")
+# LEGACY ENDPOINT REMOVED - Use GET /api/users/{uid}/chats/{cid} instead
+# Old: GET /api/sessions/{session_id} → got session info
+# New: GET /api/users/{uid}/chats/{cid} → gets chat info with metadata
 
-        # Read file content
-        content = await file.read()
-
-        # Validate file size (max 50 MB)
-        max_size = 50 * 1024 * 1024  # 50 MB
-        if len(content) > max_size:
-            raise HTTPException(status_code=400, detail="File too large. Maximum size is 50 MB")
-
-        if len(content) == 0:
-            raise HTTPException(status_code=400, detail="File is empty")
-
-        # Create upload directory
-        upload_dir = Path("temp") / session_id
-        upload_dir.mkdir(parents=True, exist_ok=True)
-
-        # Save uploaded file
-        file_path = upload_dir / safe_filename
-        with open(file_path, "wb") as f:
-            f.write(content)
-
-        # Process file through existing MedRAX interface
-        chat_interface = session_manager.get_session(session_id)
-        display_path = chat_interface.handle_upload(str(file_path))
-
-        return {
-            "message": "File uploaded successfully",
-            "file_path": str(file_path),
-            "display_path": display_path,
-            "filename": safe_filename
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
-
-@app.post("/api/chat/{session_id}", response_model=ChatResponse)
-async def chat_with_agent(session_id: str, request: ChatRequest):
-    """Send message to MedRAX agent"""
-    session = session_manager.get_session(session_id)
-    if not session:  # Fixed: was "if session:"
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    # Validate message
-    is_valid, error_msg = validate_chat_message(request.message)
-    if not is_valid:
-        raise HTTPException(status_code=400, detail=error_msg)
-
-    # Validate image path if provided
-    if request.image_path and not validate_image_path(request.image_path):
-        raise HTTPException(status_code=400, detail="Invalid or unsafe image path")
-
-    chat_interface = session_manager.get_session(session_id)
-
-    try:
-        # Process message through minimal chat interface
-        responses = []
-        tool_events = []  # Track tool execution
-        async for response in chat_interface.process_message(
-            request.message,
-            request.image_path
-        ):
-            # Parse tool events (special markers)
-            if response.startswith("__TOOL_START__"):
-                tool_name = response.replace("__TOOL_START__", "").replace("__", "")
-                tool_events.append({"tool_name": tool_name, "status": "running"})
-            elif response.startswith("__TOOL_DONE__"):
-                tool_name = response.replace("__TOOL_DONE__", "").replace("__", "")
-                # Update status
-                for event in tool_events:
-                    if event["tool_name"] == tool_name:
-                        event["status"] = "completed"
-            else:
-                responses.append(response)
-
-        # Combine all responses
-        final_response = "\n\n".join(responses) if responses else "No response generated"
-
-        # Get tool calls from chat interface
-        tool_calls_data = chat_interface.last_tool_calls if hasattr(chat_interface, 'last_tool_calls') else []
-
-        return ChatResponse(
-            response=final_response,
-            session_id=session_id,
-            tool_calls=tool_calls_data
-        )
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing message: {str(e)}")
-
-@app.get("/api/chat/{session_id}/stream")
-async def stream_analysis(session_id: str, image_path: str):
-    """Stream analysis progress using Server-Sent Events"""
-    session = session_manager.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    chat_interface = session_manager.get_session(session_id)
-
-    async def event_generator():
-        """Generate SSE events for analysis progress"""
-        try:
-            # Send start event
-            yield {
-                "event": "status",
-                "data": json.dumps({
-                    "type": "start",
-                    "message": "🤖 Starting comprehensive AI analysis..."
-                })
-            }
-
-            # Define the analysis tools to run in order
-            # NOTE: Use actual tool.name values, not tool_manager IDs
-            analysis_tools = [
-                ("chest_xray_classifier", "Pathology Classifier"),
-                ("chest_xray_segmentation", "Anatomical Segmentation"),
-                ("chest_xray_report_generator", "Report Generator"),  # Fixed: was "chest_xray_report"
-            ]
-
-            for tool_id, tool_name in analysis_tools:
-                # Check if tool is loaded
-                if tool_id not in global_tools:
-                    yield {
-                        "event": "status",
-                        "data": json.dumps({
-                            "type": "skip",
-                            "tool": tool_name,
-                            "message": f"⏭️ Skipping {tool_name} (not loaded)"
-                        })
-                    }
-                    continue
-
-                # Send progress event
-                yield {
-                    "event": "status",
-                    "data": json.dumps({
-                        "type": "progress",
-                        "tool": tool_name,
-                        "message": f"🔧 Running {tool_name}..."
-                    })
-                }
-
-                try:
-                    # Run the tool
-                    tool = global_tools[tool_id]
-                    timestamp = datetime.now(timezone.utc).isoformat()
-
-                    if tool_id == "chest_xray_classifier":
-                        result, metadata = tool._run(image_path)
-                    elif tool_id == "chest_xray_segmentation":
-                        result, metadata = tool._run(image_path)
-                    elif tool_id == "chest_xray_report_generator":  # Fixed: was "chest_xray_report"
-                        result, metadata = tool._run(image_path, chat_interface.uploaded_files)
-                    else:
-                        continue
-
-                    metadata["timestamp"] = timestamp
-
-                    # Store result directly in latest_tool_results
-                    chat_interface.latest_tool_results[tool_id] = {
-                        "result": ensure_json_serializable(result),
-                        "metadata": ensure_json_serializable(metadata)
-                    }
-
-                    # Debug logging
-                    logger.info("tool_result_stored",
-                               tool_id=tool_id,
-                               has_result=bool(result),
-                               result_type=type(result).__name__)
-
-                    # Send completion event
-                    yield {
-                        "event": "status",
-                        "data": json.dumps({
-                            "type": "complete",
-                            "tool": tool_name,
-                            "message": f"✅ {tool_name} completed"
-                        })
-                    }
-
-                except Exception as e:
-                    logger.error("tool_error", tool=tool_name, error=str(e))
-                    yield {
-                        "event": "status",
-                        "data": json.dumps({
-                            "type": "error",
-                            "tool": tool_name,
-                            "message": f"❌ {tool_name} failed: {str(e)}"
-                        })
-                    }
-
-            # Send final completion event
-            yield {
-                "event": "status",
-                "data": json.dumps({
-                    "type": "done",
-                    "message": "✅ Analysis complete!"
-                })
-            }
-
-        except Exception as e:
-            logger.error("stream_error", error=str(e))
-            yield {
-                "event": "status",
-                "data": json.dumps({
-                    "type": "error",
-                    "message": f"❌ Stream error: {str(e)}"
-                })
-            }
-
-    return EventSourceResponse(event_generator())
-
-@app.get("/api/sessions/{session_id}")
-async def get_session_info(session_id: str):
-    """Get information about a specific session"""
-    session = session_manager.get_session(session_id)
-    if not session:  # Fixed: was "if session:"
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    chat_interface = session_manager.get_session(session_id)
-
-    return {
-        "session_id": session_id,
-        "status": "active",
-        "has_image": len(chat_interface.uploaded_files) > 0,
-        "current_image": chat_interface.uploaded_files[0] if chat_interface.uploaded_files else None,
-        "thread_id": chat_interface.current_thread_id
-    }
-
-@app.delete("/api/sessions/{session_id}")
-async def delete_session(session_id: str):
-    """Delete an agent session"""
-    session = session_manager.get_session(session_id)
-    if not session:  # Fixed: was "if session:"
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    # Delete session using session_manager
-    session_manager.delete_session(session_id)
-
-    # Clean up temp files
-    session_dir = Path("temp") / session_id
-    if session_dir.exists():
-        try:
-            shutil.rmtree(session_dir)
-        except Exception as e:
-            logger.info("message", text=f"Warning: Failed to clean up session directory: {e}")
-
-    return {"message": "Session deleted successfully"}
+# LEGACY ENDPOINT REMOVED - Use DELETE /api/users/{uid}/chats/{cid} instead
+# Old: DELETE /api/sessions/{session_id} → deleted session
+# New: DELETE /api/users/{uid}/chats/{cid} → deletes chat with cleanup
 
 @app.get("/api/tools")
 async def get_available_tools():
@@ -666,113 +418,13 @@ async def get_tool_info(tool_id: str):
 
     return {"tool": all_tools[tool_id]}
 
-@app.post("/api/tools/{tool_name}/run/{session_id}")
-async def run_specific_tool(tool_name: str, session_id: str, request: Optional[dict] = None):
-    """Run a specific tool with parameters"""
-    session = session_manager.get_session(session_id)
-    if not session:  # Fixed: was "if session:"
-        raise HTTPException(status_code=404, detail="Session not found")
+# LEGACY ENDPOINT REMOVED - Tools now run automatically via agent
+# Old: POST /api/tools/{name}/run/{session_id} → manually ran specific tool
+# New: Tools execute automatically when agent processes messages in chat context
 
-    if not global_tools or tool_name not in global_tools:
-        raise HTTPException(status_code=404, detail="Tool not found")
-
-    chat_interface = session_manager.get_session(session_id)
-    image_paths = chat_interface.uploaded_files
-
-    if not image_paths:
-        raise HTTPException(status_code=400, detail="No images uploaded for this session")
-
-    # Use the first image for single-image tools, or all images for multi-image tools
-    primary_image_path = image_paths[0]
-
-    try:
-        tool = global_tools[tool_name]
-        timestamp = datetime.now(timezone.utc).isoformat()
-
-        # Run the tool directly
-        # NOTE: tool_name here is the actual tool.name (e.g., "chest_xray_classifier", "chest_xray_report_generator")
-        if tool_name == "chest_xray_classifier":
-            result, metadata = tool._run(primary_image_path)
-            metadata["timestamp"] = timestamp
-            result = ensure_json_serializable(result)
-            metadata = ensure_json_serializable(metadata)
-            return {"tool": tool_name, "result": result, "metadata": metadata}
-
-        elif tool_name == "chest_xray_report_generator":  # Fixed: was "ChestXRayReportGeneratorTool"
-            result, metadata = tool._run(primary_image_path, image_paths)
-            metadata["timestamp"] = timestamp
-            result = ensure_json_serializable(result)
-            metadata = ensure_json_serializable(metadata)
-            return {"tool": tool_name, "result": result, "metadata": metadata}
-
-        elif tool_name == "chest_xray_segmentation":  # Fixed: was "ChestXRaySegmentationTool"
-            organs = request.get("organs", None) if request else None
-            result, metadata = tool._run(primary_image_path, organs)
-            metadata["timestamp"] = timestamp
-            result = ensure_json_serializable(result)
-            metadata = ensure_json_serializable(metadata)
-            return {"tool": tool_name, "result": result, "metadata": metadata}
-
-        elif tool_name == "chest_xray_expert":  # Fixed: was "XRayVQATool"
-            # This tool supports multiple images
-            prompt = request.get("prompt", "Analyze these chest X-ray images") if request else "Analyze these chest X-ray images"
-            result, metadata = tool._run(image_paths, prompt)
-            metadata["timestamp"] = timestamp
-            result = ensure_json_serializable(result)
-            metadata = ensure_json_serializable(metadata)
-            return {"tool": tool_name, "result": result, "metadata": metadata}
-
-        elif tool_name == "xray_phrase_grounding":  # Added: handle grounding tool
-            phrase = request.get("phrase", "Cardiomegaly") if request else "Cardiomegaly"
-            result, metadata = tool._run(primary_image_path, phrase)
-            metadata["timestamp"] = timestamp
-            result = ensure_json_serializable(result)
-            metadata = ensure_json_serializable(metadata)
-            return {"tool": tool_name, "result": result, "metadata": metadata}
-
-        elif tool_name == "llava_med_qa":  # Added: handle LLaVA-Med (note: uses tool.name, not tool_id)
-            prompt = request.get("prompt", "Analyze this medical image") if request else "Analyze this medical image"
-            result, metadata = tool._run(primary_image_path, prompt)
-            metadata["timestamp"] = timestamp
-            result = ensure_json_serializable(result)
-            metadata = ensure_json_serializable(metadata)
-            return {"tool": tool_name, "result": result, "metadata": metadata}
-
-        else:
-            # Generic fallback for other tools
-            result, metadata = tool._run(primary_image_path)
-            metadata["timestamp"] = timestamp
-            result = ensure_json_serializable(result)
-            metadata = ensure_json_serializable(metadata)
-            return {"tool": tool_name, "result": result, "metadata": metadata}
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Tool execution failed: {str(e)}")
-
-@app.get("/api/analysis/{session_id}")
-async def get_analysis_results(session_id: str):
-    """Get comprehensive analysis results for a session"""
-    session = session_manager.get_session(session_id)
-    if not session:  # Fixed: was "if session:"
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    chat_interface = session_manager.get_session(session_id)
-
-    # Return stored tool results from the last agent execution
-    results = {}
-
-    # Get results from chat interface's latest_tool_results
-    for tool_name, tool_data in chat_interface.latest_tool_results.items():
-        # Always store with original tool name for frontend compatibility
-        results[tool_name] = ensure_json_serializable(tool_data)
-
-    # Debug logging
-    logger.info("analysis_results",
-                session_id=session_id[:8],
-                tool_count=len(results),
-                tool_names=list(results.keys()))
-
-    return {"session_id": session_id, "results": results}
+# LEGACY ENDPOINT REMOVED - Use GET /api/users/{uid}/chats/{cid}/results instead
+# Old: GET /api/analysis/{session_id} → got session analysis results
+# New: GET /api/users/{uid}/chats/{cid}/results → gets chat-specific results
 
 
 # ========== NEW: Multi-Chat Per User API Endpoints ==========
