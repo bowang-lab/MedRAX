@@ -12,6 +12,9 @@ interface MessageRendererProps {
 }
 
 export default function MessageRenderer({ content, apiBase, onImageClick }: MessageRendererProps) {
+    // Ensure content is always a string
+    const safeContent = typeof content === 'string' ? content : String(content || '');
+    
     return (
         <div className="prose prose-invert prose-sm max-w-none">
             <ReactMarkdown
@@ -109,7 +112,7 @@ export default function MessageRenderer({ content, apiBase, onImageClick }: Mess
                     em: ({ node, ...props }) => <em className="italic text-zinc-300" {...props} />,
                 }}
             >
-                {content}
+                {safeContent}
             </ReactMarkdown>
         </div>
     );
