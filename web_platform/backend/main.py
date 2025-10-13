@@ -254,50 +254,17 @@ async def health():
         "active_sessions": len(session_manager.sessions)  # Fixed: was agent_sessions
     }
 
-@app.post("/api/sessions", response_model=SessionInfo)
-async def create_session():
-    """Create a new agent session"""
-    # Allow session creation even with mock agent for development
-    session_id = str(uuid.uuid4())
+# LEGACY ENDPOINT REMOVED - Use POST /api/users/{user_id}/chats instead
+# Old: POST /api/sessions → created session-based chat
+# New: POST /api/users/{user_id}/chats → creates chat under specific user
 
-    # Create a chat interface for this session
-    # Pass the global agent reference (not a copy) so it gets updates when tools are loaded
-    chat_interface = ChatInterface(global_agent, global_tools or {})
-    chat_interface.current_thread_id = session_id  # Use session_id as thread_id
-    session_manager.create_session(session_id, chat_interface)
+# LEGACY ENDPOINT REMOVED - Create new chat instead (automatic fresh context)
+# Old: POST /api/sessions/{id}/clear → cleared messages but kept session  
+# New: POST /api/users/{uid}/chats → new chat = fresh context
 
-    logger.info("session_created", session_id=session_id[:8])
-
-    return SessionInfo(
-        session_id=session_id,
-        status="active" if global_agent else "mock",
-        created_at=datetime.now(timezone.utc).isoformat()
-    )
-
-@app.post("/api/sessions/{session_id}/clear")
-async def clear_chat(session_id: str):
-    """Clear chat history but keep session alive"""
-    session = session_manager.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    session.uploaded_files = []
-    session.display_files = []
-    session.latest_tool_results = {}
-    logger.info("chat_cleared", session_id=session_id[:8])
-    return {"success": True}
-
-@app.post("/api/sessions/{session_id}/new-thread")
-async def new_thread(session_id: str):
-    """Start new conversation thread"""
-    session = session_manager.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    new_thread_id = str(uuid.uuid4())
-    session.current_thread_id = new_thread_id
-    logger.info("new_thread", session_id=session_id[:8], thread_id=new_thread_id[:8])
-    return {"success": True, "thread_id": new_thread_id}
+# LEGACY ENDPOINT REMOVED - Create new chat instead
+# Old: POST /api/sessions/{id}/new-thread → new thread in same session
+# New: POST /api/users/{uid}/chats → new chat = new thread
 
 @app.post("/api/upload/{session_id}")
 async def upload_file(session_id: str, file: UploadFile = File(...)):

@@ -437,7 +437,7 @@ export default function MedRAXPlatform() {
 
                     // Fetch final results
                     const resultsUrl = `${API_BASE}/api/users/${userId}/chats/${currentChatId}/results`;
-                    
+
                     axios.get(resultsUrl)
                         .then(resultsResponse => {
                             console.log('✅ Analysis results received:', resultsResponse.data);
