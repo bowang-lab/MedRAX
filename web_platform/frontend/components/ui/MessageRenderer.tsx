@@ -14,7 +14,7 @@ interface MessageRendererProps {
 export default function MessageRenderer({ content, apiBase, onImageClick }: MessageRendererProps) {
     // Ensure content is always a string
     const safeContent = typeof content === 'string' ? content : String(content || '');
-    
+
     return (
         <div className="prose prose-invert prose-sm max-w-none">
             <ReactMarkdown

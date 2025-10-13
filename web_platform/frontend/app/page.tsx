@@ -770,11 +770,22 @@ export default function MedRAXPlatform() {
     }
 
     return (
-        <div className="h-screen flex bg-zinc-950 text-white" style={{ cursor: isResizing ? 'col-resize' : 'default' }}>
-            {/* Analysis Progress Overlay */}
-            <AnalysisProgress isAnalyzing={isAnalyzing} />
+        <div className="h-screen flex flex-col bg-zinc-950 text-white">
+            {/* Header - spans entire width */}
+            <Header
+                sessionId={currentChatId}
+                patientInfo={patientInfo}
+                isAnalyzing={isAnalyzing}
+                showPatientForm={showPatientForm}
+                onTogglePatientForm={() => setShowPatientForm(!showPatientForm)}
+            />
 
-            {/* Left: Patient History Sidebar */}
+            {/* Main layout with sidebars */}
+            <div className="flex-1 flex overflow-hidden" style={{ cursor: isResizing ? 'col-resize' : 'default' }}>
+                {/* Analysis Progress Overlay */}
+                <AnalysisProgress isAnalyzing={isAnalyzing} />
+
+                {/* Left: Patient History Sidebar */}
             {!patientSidebarCollapsed && (
                 <div className="relative flex" style={{ width: `${patientSidebarWidth}px` }}>
                     <PatientSidebar
@@ -809,7 +820,7 @@ export default function MedRAXPlatform() {
                     onClick={() => setPatientSidebarCollapsed(false)}
                     className="fixed left-0 z-30 bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 text-white p-3 rounded-r-xl border border-l-0 border-blue-500/50 transition-all duration-200 hover:scale-110 shadow-xl shadow-blue-500/50 hover:shadow-2xl hover:shadow-blue-500/60"
                     style={{
-                        top: chatSidebarCollapsed ? '50%' : 'calc(50% - 3.5rem)',
+                        top: '40%',
                         transform: 'translateY(-50%)'
                     }}
                     title="Show Patients"
@@ -825,7 +836,7 @@ export default function MedRAXPlatform() {
                     className="fixed z-30 bg-gradient-to-r from-emerald-600 to-blue-600 hover:from-emerald-500 hover:to-blue-500 text-white p-3 rounded-r-xl border border-l-0 border-emerald-500/50 transition-all duration-200 hover:scale-110 shadow-xl shadow-emerald-500/50 hover:shadow-2xl shadow-emerald-500/60"
                     style={{
                         left: `${patientSidebarCollapsed ? 0 : patientSidebarWidth}px`,
-                        top: patientSidebarCollapsed ? 'calc(50% + 3.5rem)' : '50%',
+                        top: '60%',
                         transform: 'translateY(-50%)'
                     }}
                     title="Show Conversations"
@@ -856,24 +867,17 @@ export default function MedRAXPlatform() {
                 </div>
             )}
 
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col">
-                {/* Header */}
-                <Header
-                    sessionId={currentChatId}  // Note: renamed to chatId would be better but keeping for component compatibility
-                    patientInfo={patientInfo}
-                    isAnalyzing={isAnalyzing}
-                    showPatientForm={showPatientForm}
-                    onTogglePatientForm={() => setShowPatientForm(!showPatientForm)}
-                />
-
+            {/* Main Content Area */}
+            <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Patient Info Form */}
                 {showPatientForm && (
-                    <PatientInfoForm
-                        patientInfo={patientInfo}
-                        onChange={setPatientInfo}
-                        onClose={() => setShowPatientForm(false)}
-                    />
+                    <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50">
+                        <PatientInfoForm
+                            patientInfo={patientInfo}
+                            onChange={setPatientInfo}
+                            onClose={() => setShowPatientForm(false)}
+                        />
+                    </div>
                 )}
 
                 {/* Main Content Area */}
@@ -1041,41 +1045,45 @@ export default function MedRAXPlatform() {
                                     <div ref={messagesEndRef} />
                                 </div>
 
-                                {/* Chat Input Area */}
-                                <div className="border-t border-zinc-800/50 bg-gradient-to-r from-zinc-900/95 to-zinc-900/80 backdrop-blur-sm p-4 space-y-3">
+                                {/* Chat Input Area - Modern, Flowing Design */}
+                                <div className="bg-gradient-to-t from-zinc-900 via-zinc-900/98 to-transparent p-6 space-y-4">
                                     {/* Run Complete Analysis Button - Show when images uploaded but no analysis run */}
                                     {uploadedImages.length > 0 && !isAnalyzing && (
                                         <div className="max-w-4xl mx-auto">
                                             <button
                                                 onClick={runCompleteAnalysis}
                                                 disabled={isAnalyzing || !currentChatId}
-                                                className="w-full px-6 py-4 bg-gradient-to-r from-emerald-600 via-blue-600 to-purple-600 hover:from-emerald-500 hover:via-blue-500 hover:to-purple-500 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/40 font-semibold flex items-center justify-center gap-2 text-white"
+                                                className="w-full px-6 py-4 bg-gradient-to-r from-emerald-600 via-blue-600 to-purple-600 hover:from-emerald-500 hover:via-blue-500 hover:to-purple-500 rounded-2xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-emerald-500/30 font-semibold flex items-center justify-center gap-3 text-white text-lg"
                                             >
-                                                <Bot className="h-5 w-5" />
+                                                <Bot className="h-6 w-6" />
                                                 Run Complete AI Analysis
-                                                <span className="text-xs opacity-75">({uploadedImages.length} image{uploadedImages.length !== 1 ? 's' : ''})</span>
+                                                <span className="px-3 py-1 bg-white/20 rounded-full text-sm">
+                                                    {uploadedImages.length} image{uploadedImages.length !== 1 ? 's' : ''}
+                                                </span>
                                             </button>
                                         </div>
                                     )}
 
-                                    {/* Chat Input */}
-                                    <div className="max-w-4xl mx-auto flex gap-3 items-center">
-                                        <input
-                                            type="text"
-                                            value={inputMessage}
-                                            onChange={(e) => setInputMessage(e.target.value)}
-                                            onKeyPress={(e) => e.key === 'Enter' && !isLoading && sendMessage()}
-                                            placeholder="Ask about the analysis..."
-                                            className="flex-1 px-5 py-4 bg-zinc-800/50 border border-zinc-700/50 rounded-xl text-sm placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all backdrop-blur-sm"
-                                            disabled={isLoading || !currentChatId}
-                                        />
-                                        <button
-                                            onClick={sendMessage}
-                                            disabled={isLoading || !currentChatId || !inputMessage.trim()}
-                                            className="px-6 py-4 bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/40 font-semibold"
-                                        >
-                                            {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-                                        </button>
+                                    {/* Chat Input - Unified, Flowing Design */}
+                                    <div className="max-w-4xl mx-auto">
+                                        <div className="relative flex items-center gap-3 bg-zinc-800/40 backdrop-blur-xl border border-zinc-700/30 rounded-2xl p-2 shadow-xl hover:shadow-2xl hover:border-zinc-600/50 transition-all duration-300">
+                                            <input
+                                                type="text"
+                                                value={inputMessage}
+                                                onChange={(e) => setInputMessage(e.target.value)}
+                                                onKeyPress={(e) => e.key === 'Enter' && !isLoading && sendMessage()}
+                                                placeholder="Ask about the analysis..."
+                                                className="flex-1 px-5 py-4 bg-transparent text-base placeholder:text-zinc-500 focus:outline-none"
+                                                disabled={isLoading || !currentChatId}
+                                            />
+                                            <button
+                                                onClick={sendMessage}
+                                                disabled={isLoading || !currentChatId || !inputMessage.trim()}
+                                                className="px-5 py-4 bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/50"
+                                            >
+                                                {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1207,6 +1215,7 @@ export default function MedRAXPlatform() {
                     </div>
                 )}
             </div>
-        </div>
+            </div> {/* Close main layout with sidebars */}
+        </div> {/* Close h-screen container */}
     );
 }
