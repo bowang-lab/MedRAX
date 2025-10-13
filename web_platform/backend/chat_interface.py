@@ -268,7 +268,7 @@ class ChatInterface:
                                             request_id=self.current_request_id,
                                             tool_name=tool_name,
                                             result_data=result_data,
-                                            metadata={
+                                            result_metadata={
                                                 "image_paths": self.uploaded_files.copy(),
                                                 **metadata_data
                                             },

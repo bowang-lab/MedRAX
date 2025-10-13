@@ -133,7 +133,7 @@ class ToolResult(Base):
     request_id = Column(String, nullable=True, index=True)  # UUID for the analysis request
     tool_name = Column(String, nullable=False)
     result_data = Column(JSON, nullable=False)  # Stored as JSON
-    metadata = Column(JSON, nullable=True)  # Additional metadata (e.g., image_paths)
+    result_metadata = Column(JSON, nullable=True)  # Additional metadata (e.g., image_paths) - renamed from 'metadata' to avoid SQLAlchemy conflict
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships

@@ -818,8 +818,8 @@ async def get_tool_execution_history(
             query = query.filter(ToolResult.request_id == filter_by_request)
         
         if filter_by_image:
-            # Filter by image path in metadata JSON
-            query = query.filter(ToolResult.metadata.contains(filter_by_image))
+            # Filter by image path in result_metadata JSON
+            query = query.filter(ToolResult.result_metadata.contains(filter_by_image))
         
         # Order by creation time (newest first)
         query = query.order_by(ToolResult.created_at.desc())
@@ -840,9 +840,9 @@ async def get_tool_execution_history(
                 "timestamp": result.created_at.isoformat() if result.created_at else None,
                 "request_id": result.request_id,
                 "tool_name": result.tool_name,
-                "image_paths": result.metadata.get("image_paths", []) if result.metadata else [],
+                "image_paths": result.result_metadata.get("image_paths", []) if result.result_metadata else [],
                 "result": result.result_data,
-                "metadata": result.metadata or {}
+                "metadata": result.result_metadata or {}
             })
             
             if latest_only:

@@ -206,7 +206,7 @@ export default function MedRAXPlatform() {
     const createNewChat = async (chatName?: string) => {
         try {
             const response = await axios.post(`${API_BASE}/api/users/${userId}/chats`, null, {
-                params: { 
+                params: {
                     chat_name: chatName,
                     token: authToken
                 }
@@ -786,102 +786,99 @@ export default function MedRAXPlatform() {
                 <AnalysisProgress isAnalyzing={isAnalyzing} />
 
                 {/* Left: Patient History Sidebar */}
-            {!patientSidebarCollapsed && (
-                <div className="relative flex" style={{ width: `${patientSidebarWidth}px` }}>
-                    <PatientSidebar
-                        sessions={sessionHistory.map((s, idx) => ({
-                            sessionId: s.sessionId,
-                            patientName: s.patientName,
-                            patientAge: s.patientAge,
-                            timestamp: new Date(s.timestamp),
-                            imageCount: s.imageCount,
-                            isActive: s.sessionId === userId // Check against userId, not sessionId
-                        }))}
-                        onSelectSession={async (id) => {
-                            const session = getSession(id);
-                            if (session) await loadSession(session);
+                {!patientSidebarCollapsed && (
+                    <div className="relative flex" style={{ width: `${patientSidebarWidth}px` }}>
+                        <PatientSidebar
+                            sessions={sessionHistory.map((s, idx) => ({
+                                sessionId: s.sessionId,
+                                patientName: s.patientName,
+                                patientAge: s.patientAge,
+                                timestamp: new Date(s.timestamp),
+                                imageCount: s.imageCount,
+                                isActive: s.sessionId === userId // Check against userId, not sessionId
+                            }))}
+                            onSelectSession={async (id) => {
+                                const session = getSession(id);
+                                if (session) await loadSession(session);
+                            }}
+                            onNewPatient={startNewPatient}
+                            collapsed={false}
+                            onToggleCollapse={() => setPatientSidebarCollapsed(!patientSidebarCollapsed)}
+                        />
+                        {/* Resize handle */}
+                        <div
+                            className="absolute right-0 top-0 bottom-0 w-1 hover:w-2 bg-gradient-to-b from-blue-500/20 to-emerald-500/20 hover:from-blue-500/50 hover:to-emerald-500/50 cursor-col-resize transition-all z-40"
+                            onMouseDown={startResize('patient')}
+                            title="Drag to resize"
+                        />
+                    </div>
+                )}
+
+                {/* Patient Sidebar Expand Button (when collapsed) */}
+                {patientSidebarCollapsed && (
+                    <button
+                        onClick={() => setPatientSidebarCollapsed(false)}
+                        className="fixed left-0 z-30 bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 text-white p-3 rounded-r-xl border border-l-0 border-blue-500/50 transition-all duration-200 hover:scale-110 shadow-xl shadow-blue-500/50 hover:shadow-2xl hover:shadow-blue-500/60"
+                        style={{
+                            top: '40%',
+                            transform: 'translateY(-50%)'
                         }}
-                        onNewPatient={startNewPatient}
-                        collapsed={false}
-                        onToggleCollapse={() => setPatientSidebarCollapsed(!patientSidebarCollapsed)}
-                    />
-                    {/* Resize handle */}
-                    <div
-                        className="absolute right-0 top-0 bottom-0 w-1 hover:w-2 bg-gradient-to-b from-blue-500/20 to-emerald-500/20 hover:from-blue-500/50 hover:to-emerald-500/50 cursor-col-resize transition-all z-40"
-                        onMouseDown={startResize('patient')}
-                        title="Drag to resize"
-                    />
-                </div>
-            )}
+                        title="Show Patients"
+                    >
+                        <ChevronRight className="h-5 w-5" />
+                    </button>
+                )}
 
-            {/* Patient Sidebar Expand Button (when collapsed) */}
-            {patientSidebarCollapsed && (
-                <button
-                    onClick={() => setPatientSidebarCollapsed(false)}
-                    className="fixed left-0 z-30 bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 text-white p-3 rounded-r-xl border border-l-0 border-blue-500/50 transition-all duration-200 hover:scale-110 shadow-xl shadow-blue-500/50 hover:shadow-2xl hover:shadow-blue-500/60"
-                    style={{
-                        top: '40%',
-                        transform: 'translateY(-50%)'
-                    }}
-                    title="Show Patients"
-                >
-                    <ChevronRight className="h-5 w-5" />
-                </button>
-            )}
+                {/* Chat Sidebar Expand Button (when collapsed) */}
+                {chatSidebarCollapsed && (
+                    <button
+                        onClick={() => setChatSidebarCollapsed(false)}
+                        className="fixed z-30 bg-gradient-to-r from-emerald-600 to-blue-600 hover:from-emerald-500 hover:to-blue-500 text-white p-3 rounded-r-xl border border-l-0 border-emerald-500/50 transition-all duration-200 hover:scale-110 shadow-xl shadow-emerald-500/50 hover:shadow-2xl shadow-emerald-500/60"
+                        style={{
+                            left: `${patientSidebarCollapsed ? 0 : patientSidebarWidth}px`,
+                            top: '60%',
+                            transform: 'translateY(-50%)'
+                        }}
+                        title="Show Conversations"
+                    >
+                        <ChevronRight className="h-5 w-5" />
+                    </button>
+                )}
 
-            {/* Chat Sidebar Expand Button (when collapsed) */}
-            {chatSidebarCollapsed && (
-                <button
-                    onClick={() => setChatSidebarCollapsed(false)}
-                    className="fixed z-30 bg-gradient-to-r from-emerald-600 to-blue-600 hover:from-emerald-500 hover:to-blue-500 text-white p-3 rounded-r-xl border border-l-0 border-emerald-500/50 transition-all duration-200 hover:scale-110 shadow-xl shadow-emerald-500/50 hover:shadow-2xl shadow-emerald-500/60"
-                    style={{
-                        left: `${patientSidebarCollapsed ? 0 : patientSidebarWidth}px`,
-                        top: '60%',
-                        transform: 'translateY(-50%)'
-                    }}
-                    title="Show Conversations"
-                >
-                    <ChevronRight className="h-5 w-5" />
-                </button>
-            )}
-
-            {/* Chat Sidebar */}
-            {!chatSidebarCollapsed && (
-                <div className="relative flex" style={{ width: `${chatSidebarWidth}px` }}>
-                    <ChatSidebar
-                        userId={userId}
-                        currentChatId={currentChatId}
-                        chats={chats}
-                        collapsed={false}
-                        onSelectChat={selectChat}
-                        onNewChat={createNewChat}
-                        onDeleteChat={deleteChat}
-                        onToggleCollapse={() => setChatSidebarCollapsed(!chatSidebarCollapsed)}
-                    />
-                    {/* Resize handle */}
-                    <div
-                        className="absolute right-0 top-0 bottom-0 w-1 hover:w-2 bg-gradient-to-b from-emerald-500/20 to-blue-500/20 hover:from-emerald-500/50 hover:to-blue-500/50 cursor-col-resize transition-all z-40"
-                        onMouseDown={startResize('chat')}
-                        title="Drag to resize"
-                    />
-                </div>
-            )}
-
-            {/* Main Content Area */}
-            <div className="flex-1 flex flex-col overflow-hidden">
-                {/* Patient Info Form */}
-                {showPatientForm && (
-                    <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50">
-                        <PatientInfoForm
-                            patientInfo={patientInfo}
-                            onChange={setPatientInfo}
-                            onClose={() => setShowPatientForm(false)}
+                {/* Chat Sidebar */}
+                {!chatSidebarCollapsed && (
+                    <div className="relative flex" style={{ width: `${chatSidebarWidth}px` }}>
+                        <ChatSidebar
+                            userId={userId}
+                            currentChatId={currentChatId}
+                            chats={chats}
+                            collapsed={false}
+                            onSelectChat={selectChat}
+                            onNewChat={createNewChat}
+                            onDeleteChat={deleteChat}
+                            onToggleCollapse={() => setChatSidebarCollapsed(!chatSidebarCollapsed)}
+                        />
+                        {/* Resize handle */}
+                        <div
+                            className="absolute right-0 top-0 bottom-0 w-1 hover:w-2 bg-gradient-to-b from-emerald-500/20 to-blue-500/20 hover:from-emerald-500/50 hover:to-blue-500/50 cursor-col-resize transition-all z-40"
+                            onMouseDown={startResize('chat')}
+                            title="Drag to resize"
                         />
                     </div>
                 )}
 
                 {/* Main Content Area */}
                 <div className="flex-1 flex overflow-hidden">
+                    {/* Patient Info Form */}
+                    {showPatientForm && (
+                        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50">
+                            <PatientInfoForm
+                                patientInfo={patientInfo}
+                                onChange={setPatientInfo}
+                                onClose={() => setShowPatientForm(false)}
+                            />
+                        </div>
+                    )}
                     {/* Left: Image Gallery Sidebar - Show when images exist */}
                     {uploadedImages.length > 0 && !imageSidebarCollapsed && (
                         <div className="relative flex" style={{ width: `${imageSidebarWidth}px` }}>
@@ -1215,7 +1212,6 @@ export default function MedRAXPlatform() {
                     </div>
                 )}
             </div>
-            </div> {/* Close main layout with sidebars */}
-        </div> {/* Close h-screen container */}
+        </div>
     );
 }
