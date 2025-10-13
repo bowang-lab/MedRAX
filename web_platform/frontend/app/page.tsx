@@ -49,7 +49,7 @@ export default function MedRAXPlatform() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [authToken, setAuthToken] = useState<string | null>(null);
     const [currentUser, setCurrentUser] = useState<any>(null);
-    
+
     // Generate initial userId only once on mount
     const [initialUserIdGenerated] = useState(() => `user-${Date.now()}`);
 
@@ -169,7 +169,9 @@ export default function MedRAXPlatform() {
     // Load chats for current user
     const loadUserChats = async () => {
         try {
-            const response = await axios.get(`${API_BASE}/api/users/${userId}/chats`);
+            const response = await axios.get(`${API_BASE}/api/users/${userId}/chats`, {
+                params: { token: authToken }
+            });
             setChats(response.data.chats);
 
             // If no chats exist, create first one
@@ -204,7 +206,10 @@ export default function MedRAXPlatform() {
     const createNewChat = async (chatName?: string) => {
         try {
             const response = await axios.post(`${API_BASE}/api/users/${userId}/chats`, null, {
-                params: { chat_name: chatName }
+                params: { 
+                    chat_name: chatName,
+                    token: authToken
+                }
             });
 
             const newChat = response.data;
@@ -238,7 +243,9 @@ export default function MedRAXPlatform() {
             setCurrentChatId(chatId);
 
             // Fetch chat details
-            const response = await axios.get(`${API_BASE}/api/users/${userId}/chats/${chatId}`);
+            const response = await axios.get(`${API_BASE}/api/users/${userId}/chats/${chatId}`, {
+                params: { token: authToken }
+            });
             const chatData = response.data;
 
             // Update state with chat data
@@ -279,7 +286,9 @@ export default function MedRAXPlatform() {
     // Delete a chat
     const deleteChat = async (chatId: string) => {
         try {
-            await axios.delete(`${API_BASE}/api/users/${userId}/chats/${chatId}`);
+            await axios.delete(`${API_BASE}/api/users/${userId}/chats/${chatId}`, {
+                params: { token: authToken }
+            });
             setChats(prev => prev.filter(c => c.chat_id !== chatId));
 
             // If deleting current chat, switch to another or create new
@@ -352,12 +361,11 @@ export default function MedRAXPlatform() {
         setShowPatientForm(false);
         setPatientInfo({ name: '', age: '', gender: '', notes: '' });
 
-        // Create a new user ID for the new patient
-        const newUserId = `user-${Date.now()}`;
-        setUserId(newUserId);
+        // Create a new chat for the current authenticated user (not a new userId!)
+        // The userId should remain the authenticated user's ID
+        await createNewChat('New Patient Case');
 
-        // This will trigger the useEffect to load/create chats for the new user
-        console.log('✅ New patient started with userId:', newUserId);
+        console.log('✅ New patient case started for authenticated user:', userId);
 
         // Show welcome message
         setMessages([{
@@ -385,7 +393,7 @@ export default function MedRAXPlatform() {
 
         try {
             const response = await axios.post(
-                `${API_BASE}/api/users/${userId}/chats/${currentChatId}/upload`,
+                `${API_BASE}/api/users/${userId}/chats/${currentChatId}/upload?token=${authToken}`,
                 formData,
                 { headers: { 'Content-Type': 'multipart/form-data' } }
             );
@@ -451,7 +459,7 @@ export default function MedRAXPlatform() {
 
         try {
             // Use chat-specific streaming endpoint (analyzes ALL images in the chat)
-            const streamUrl = `${API_BASE}/api/users/${userId}/chats/${currentChatId}/stream`;
+            const streamUrl = `${API_BASE}/api/users/${userId}/chats/${currentChatId}/stream?token=${authToken}`;
 
             const eventSource = new EventSource(streamUrl);
 
@@ -478,8 +486,8 @@ export default function MedRAXPlatform() {
 
                     // Fetch both latest results and full history
                     Promise.all([
-                        axios.get(resultsUrl),
-                        axios.get(historyUrl)
+                        axios.get(resultsUrl, { params: { token: authToken } }),
+                        axios.get(historyUrl, { params: { token: authToken } })
                     ]).then(([resultsResponse, historyResponse]) => {
                         console.log('✅ Analysis results received:', resultsResponse.data);
                         const results = resultsResponse.data.results || {};
@@ -590,7 +598,7 @@ export default function MedRAXPlatform() {
         }]);
 
         try {
-            const response = await axios.post(`${API_BASE}/api/users/${userId}/chats/${currentChatId}/messages`, {
+            const response = await axios.post(`${API_BASE}/api/users/${userId}/chats/${currentChatId}/messages?token=${authToken}`, {
                 message: userMessage,
                 image_path: currentImage
             });
@@ -623,7 +631,9 @@ export default function MedRAXPlatform() {
 
             // Fetch updated results after each message (tools might have been called)
             try {
-                const resultsResponse = await axios.get(`${API_BASE}/api/users/${userId}/chats/${currentChatId}/results`);
+                const resultsResponse = await axios.get(`${API_BASE}/api/users/${userId}/chats/${currentChatId}/results`, {
+                    params: { token: authToken }
+                });
                 if (resultsResponse.data.results && Object.keys(resultsResponse.data.results).length > 0) {
                     setAnalysisResults(Object.entries(resultsResponse.data.results));
                     setBackendLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 📊 Results updated: ${Object.keys(resultsResponse.data.results).length} tools`]);
@@ -715,7 +725,7 @@ export default function MedRAXPlatform() {
     useEffect(() => {
         const token = localStorage.getItem('medrax_token');
         const user = localStorage.getItem('medrax_user');
-        
+
         if (token && user) {
             // Verify token is still valid
             axios.get(`${API_BASE}/api/auth/verify?token=${token}`)
@@ -733,27 +743,27 @@ export default function MedRAXPlatform() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-    
+
     const handleLoginSuccess = (token: string, user: any) => {
         setAuthToken(token);
         setCurrentUser(user);
         setIsAuthenticated(true);
         setUserId(user.user_id);
     };
-    
+
     const handleLogout = () => {
         if (authToken) {
             axios.post(`${API_BASE}/api/auth/logout?token=${authToken}`)
                 .catch(err => console.error('Logout error:', err));
         }
-        
+
         localStorage.removeItem('medrax_token');
         localStorage.removeItem('medrax_user');
         setAuthToken(null);
         setCurrentUser(null);
         setIsAuthenticated(false);
     };
-    
+
     // Show login page if not authenticated
     if (!isAuthenticated) {
         return <LoginPage onLoginSuccess={handleLoginSuccess} apiBase={API_BASE} />;

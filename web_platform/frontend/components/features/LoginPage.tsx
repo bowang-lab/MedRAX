@@ -30,13 +30,13 @@ export default function LoginPage({ onLoginSuccess, apiBase }: LoginPageProps) {
                     password,
                     display_name: displayName || username
                 });
-                
+
                 // Auto-login after registration
                 const loginResponse = await axios.post(`${apiBase}/api/auth/login`, {
                     username,
                     password
                 });
-                
+
                 const { token, user } = loginResponse.data;
                 localStorage.setItem('medrax_token', token);
                 localStorage.setItem('medrax_user', JSON.stringify(user));
@@ -47,7 +47,7 @@ export default function LoginPage({ onLoginSuccess, apiBase }: LoginPageProps) {
                     username,
                     password
                 });
-                
+
                 const { token, user } = response.data;
                 localStorage.setItem('medrax_token', token);
                 localStorage.setItem('medrax_user', JSON.stringify(user));
@@ -77,21 +77,19 @@ export default function LoginPage({ onLoginSuccess, apiBase }: LoginPageProps) {
                     <div className="flex gap-2 mb-6">
                         <button
                             onClick={() => setIsRegister(false)}
-                            className={`flex-1 py-2 px-4 rounded-xl font-medium transition-all ${
-                                !isRegister
-                                    ? 'bg-gradient-to-r from-blue-600 to-emerald-600 text-white shadow-lg'
-                                    : 'bg-zinc-800/50 text-zinc-400 hover:text-zinc-300'
-                            }`}
+                            className={`flex-1 py-2 px-4 rounded-xl font-medium transition-all ${!isRegister
+                                ? 'bg-gradient-to-r from-blue-600 to-emerald-600 text-white shadow-lg'
+                                : 'bg-zinc-800/50 text-zinc-400 hover:text-zinc-300'
+                                }`}
                         >
                             Login
                         </button>
                         <button
                             onClick={() => setIsRegister(true)}
-                            className={`flex-1 py-2 px-4 rounded-xl font-medium transition-all ${
-                                isRegister
-                                    ? 'bg-gradient-to-r from-blue-600 to-emerald-600 text-white shadow-lg'
-                                    : 'bg-zinc-800/50 text-zinc-400 hover:text-zinc-300'
-                            }`}
+                            className={`flex-1 py-2 px-4 rounded-xl font-medium transition-all ${isRegister
+                                ? 'bg-gradient-to-r from-blue-600 to-emerald-600 text-white shadow-lg'
+                                : 'bg-zinc-800/50 text-zinc-400 hover:text-zinc-300'
+                                }`}
                         >
                             Register
                         </button>

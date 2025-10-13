@@ -43,6 +43,25 @@ from utils import (
     validate_chat_message,
 )
 
+
+# Helper function to verify user authentication
+def verify_user_token(token: Optional[str], expected_user_id: str) -> bool:
+    """
+    Verify that the provided token belongs to the expected user.
+    Returns True if valid, raises HTTPException if not.
+    """
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication token required")
+
+    actual_user_id = auth_manager.verify_token(token)
+    if not actual_user_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    if actual_user_id != expected_user_id:
+        raise HTTPException(status_code=403, detail="Access denied: user_id mismatch")
+
+    return True
+
 # Configure environment variables for ML libraries
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['TRANSFORMERS_VERBOSITY'] = 'error'
@@ -280,12 +299,12 @@ async def register(request: RegisterRequest):
         password=request.password,
         display_name=request.display_name
     )
-    
+
     if not success:
         raise HTTPException(status_code=400, detail=message)
-    
+
     logger.info("user_registered", username=request.username)
-    
+
     return {
         "success": True,
         "message": message,
@@ -302,14 +321,14 @@ async def login(request: LoginRequest):
         username=request.username,
         password=request.password
     )
-    
+
     if not success:
         raise HTTPException(status_code=401, detail=message)
-    
+
     user_info = auth_manager.get_user_info(request.username)
-    
+
     logger.info("user_logged_in", username=request.username)
-    
+
     return {
         "success": True,
         "message": message,
@@ -321,10 +340,10 @@ async def login(request: LoginRequest):
 async def logout(token: str = Query(..., description="Session token")):
     """Logout user by invalidating session token"""
     success = auth_manager.logout(token)
-    
+
     if not success:
         raise HTTPException(status_code=400, detail="Invalid token")
-    
+
     return {
         "success": True,
         "message": "Logged out successfully"
@@ -334,12 +353,12 @@ async def logout(token: str = Query(..., description="Session token")):
 async def verify_token(token: str = Query(..., description="Session token")):
     """Verify if token is valid and return user info"""
     user_id = auth_manager.verify_token(token)
-    
+
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
-    
+
     user_info = auth_manager.get_user_info(user_id)
-    
+
     return {
         "valid": True,
         "user": user_info
@@ -349,7 +368,7 @@ async def verify_token(token: str = Query(..., description="Session token")):
 async def list_users():
     """List all registered users (admin endpoint)"""
     users = auth_manager.list_users()
-    
+
     return {
         "users": users,
         "count": len(users)
@@ -531,8 +550,11 @@ async def get_tool_info(tool_id: str):
 # ========== NEW: Multi-Chat Per User API Endpoints ==========
 
 @app.post("/api/users/{user_id}/chats")
-async def create_user_chat(user_id: str, chat_name: Optional[str] = None):
+async def create_user_chat(user_id: str, chat_name: Optional[str] = None, token: Optional[str] = Query(None)):
     """Create a new chat for a user"""
+    # Verify authentication
+    verify_user_token(token, user_id)
+
     chat_id = str(uuid.uuid4())
 
     # Create chat interface
@@ -561,8 +583,11 @@ async def create_user_chat(user_id: str, chat_name: Optional[str] = None):
     }
 
 @app.get("/api/users/{user_id}/chats")
-async def list_user_chats(user_id: str):
+async def list_user_chats(user_id: str, token: Optional[str] = Query(None)):
     """List all chats for a user"""
+    # Verify authentication
+    verify_user_token(token, user_id)
+
     chats = session_manager.list_chats(user_id)
 
     logger.info("chats_listed", user_id=user_id[:8], count=len(chats))
@@ -574,8 +599,11 @@ async def list_user_chats(user_id: str):
     }
 
 @app.get("/api/users/{user_id}/chats/{chat_id}")
-async def get_user_chat(user_id: str, chat_id: str):
+async def get_user_chat(user_id: str, chat_id: str, token: Optional[str] = Query(None)):
     """Get details of a specific chat"""
+    # Verify authentication
+    verify_user_token(token, user_id)
+
     chat_interface = session_manager.get_chat(user_id, chat_id)
     if not chat_interface:
         raise HTTPException(status_code=404, detail="Chat not found")
@@ -592,8 +620,11 @@ async def get_user_chat(user_id: str, chat_id: str):
     }
 
 @app.post("/api/users/{user_id}/chats/{chat_id}/messages")
-async def send_chat_message(user_id: str, chat_id: str, request: ChatRequest):
+async def send_chat_message(user_id: str, chat_id: str, request: ChatRequest, token: Optional[str] = Query(None)):
     """Send a message to a specific chat"""
+    # Verify authentication
+    verify_user_token(token, user_id)
+
     chat_interface = session_manager.get_chat(user_id, chat_id)
     if not chat_interface:
         raise HTTPException(status_code=404, detail="Chat not found")
@@ -642,7 +673,7 @@ async def send_chat_message(user_id: str, chat_id: str, request: ChatRequest):
         raise HTTPException(status_code=500, detail=f"Error processing message: {str(e)}")
 
 @app.get("/api/users/{user_id}/chats/{chat_id}/stream")
-async def stream_chat_analysis(user_id: str, chat_id: str):
+async def stream_chat_analysis(user_id: str, chat_id: str, token: Optional[str] = Query(None)):
     """
     Stream comprehensive analysis results for ALL images in the chat using Server-Sent Events.
     
@@ -653,10 +684,13 @@ async def stream_chat_analysis(user_id: str, chat_id: str):
     - Detailed radiology report generation
     - Visual question answering capabilities
     """
+    # Verify authentication
+    verify_user_token(token, user_id)
+
     chat_interface = session_manager.get_chat(user_id, chat_id)
     if not chat_interface:
         raise HTTPException(status_code=404, detail="Chat not found")
-    
+
     # Check if images are uploaded
     if not chat_interface.uploaded_files:
         raise HTTPException(status_code=400, detail="No images uploaded for analysis")
@@ -724,8 +758,11 @@ Use all available diagnostic tools to provide the most thorough analysis possibl
     )
 
 @app.get("/api/users/{user_id}/chats/{chat_id}/results")
-async def get_chat_analysis_results(user_id: str, chat_id: str):
+async def get_chat_analysis_results(user_id: str, chat_id: str, token: Optional[str] = Query(None)):
     """Get analysis results for a specific chat"""
+    # Verify authentication
+    verify_user_token(token, user_id)
+
     chat_interface = session_manager.get_chat(user_id, chat_id)
     if not chat_interface:
         raise HTTPException(status_code=404, detail="Chat not found")
@@ -749,11 +786,12 @@ async def get_chat_analysis_results(user_id: str, chat_id: str):
 
 @app.get("/api/users/{user_id}/chats/{chat_id}/tool-history")
 async def get_tool_execution_history(
-    user_id: str, 
+    user_id: str,
     chat_id: str,
     filter_by_image: Optional[str] = Query(None, description="Filter by image path"),
     filter_by_request: Optional[str] = Query(None, description="Filter by request ID"),
-    latest_only: bool = Query(False, description="Return only latest execution per tool")
+    latest_only: bool = Query(False, description="Return only latest execution per tool"),
+    token: Optional[str] = Query(None)
 ):
     """
     Get full tool execution history for a chat with optional filtering.
@@ -765,27 +803,30 @@ async def get_tool_execution_history(
     
     Returns a list of all tool executions with timestamps, image_paths, and results.
     """
+    # Verify authentication
+    verify_user_token(token, user_id)
+
     chat_interface = session_manager.get_chat(user_id, chat_id)
     if not chat_interface:
         raise HTTPException(status_code=404, detail="Chat not found")
-    
+
     # Get filtered history
     history = chat_interface.get_tool_execution_history(
         filter_by_image=filter_by_image,
         filter_by_request=filter_by_request,
         latest_only=latest_only
     )
-    
+
     # Ensure JSON serializable
     serialized_history = [ensure_json_serializable(record) for record in history]
-    
+
     logger.info("tool_history_fetched",
                chat_id=chat_id[:8],
                total_executions=len(serialized_history),
                filter_image=filter_by_image is not None,
                filter_request=filter_by_request is not None,
                latest_only=latest_only)
-    
+
     return {
         "history": serialized_history,
         "count": len(serialized_history),
@@ -797,8 +838,11 @@ async def get_tool_execution_history(
     }
 
 @app.delete("/api/users/{user_id}/chats/{chat_id}")
-async def delete_user_chat(user_id: str, chat_id: str):
+async def delete_user_chat(user_id: str, chat_id: str, token: Optional[str] = Query(None)):
     """Delete a specific chat"""
+    # Verify authentication
+    verify_user_token(token, user_id)
+
     success = session_manager.delete_chat(user_id, chat_id)
     if not success:
         raise HTTPException(status_code=404, detail="Chat not found")
@@ -844,8 +888,11 @@ async def cleanup_old_files_endpoint(max_age_hours: int = 24):
     }
 
 @app.post("/api/users/{user_id}/chats/{chat_id}/cleanup")
-async def cleanup_chat(user_id: str, chat_id: str):
+async def cleanup_chat(user_id: str, chat_id: str, token: Optional[str] = Query(None)):
     """Clean up memory and temp files for a specific chat"""
+    # Verify authentication
+    verify_user_token(token, user_id)
+
     chat_interface = session_manager.get_chat(user_id, chat_id)
     if not chat_interface:
         raise HTTPException(status_code=404, detail="Chat not found")
@@ -864,8 +911,11 @@ async def cleanup_chat(user_id: str, chat_id: str):
     }
 
 @app.post("/api/users/{user_id}/chats/{chat_id}/upload")
-async def upload_to_chat(user_id: str, chat_id: str, file: UploadFile = File(...)):
+async def upload_to_chat(user_id: str, chat_id: str, file: UploadFile = File(...), token: Optional[str] = Query(None)):
     """Upload an image to a specific chat"""
+    # Verify authentication
+    verify_user_token(token, user_id)
+
     chat_interface = session_manager.get_chat(user_id, chat_id)
     if not chat_interface:
         raise HTTPException(status_code=404, detail="Chat not found")
