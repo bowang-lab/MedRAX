@@ -139,10 +139,17 @@ class ToolResult(Base):
 
 # Database utilities
 def init_db():
-    """Initialize database tables"""
+    """Initialize database tables and create default user"""
     try:
         Base.metadata.create_all(bind=engine)
         logger.info("database_initialized", message="Database tables created successfully")
+        
+        # Create default user after tables are created
+        try:
+            from auth import create_default_user_if_needed
+            create_default_user_if_needed()
+        except Exception as auth_error:
+            logger.warning("default_user_setup_skipped", error=str(auth_error))
     except Exception as e:
         logger.error("database_init_error", error=str(e))
         raise

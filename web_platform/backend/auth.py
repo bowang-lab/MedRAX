@@ -263,20 +263,28 @@ class SimpleAuthManager:
 _auth_manager: Optional[SimpleAuthManager] = None
 
 
+def create_default_user_if_needed():
+    """
+    Create default test user if no users exist.
+    Call this after init_db() to ensure tables exist.
+    """
+    auth_mgr = get_auth_manager()
+    db = SessionLocal()
+    try:
+        user_count = db.query(AuthUser).count()
+        if user_count == 0:
+            auth_mgr.register_user("testuser", "testpass", "Test User")
+            logger.info("default_user_created", username="testuser")
+    except Exception as e:
+        logger.error("default_user_creation_failed", error=str(e))
+    finally:
+        db.close()
+
+
 def get_auth_manager() -> SimpleAuthManager:
     """Get or create global auth manager instance"""
     global _auth_manager
     if _auth_manager is None:
         _auth_manager = SimpleAuthManager(session_duration_days=30)
-
-        # Create default test user if no users exist
-        db = SessionLocal()
-        try:
-            user_count = db.query(AuthUser).count()
-            if user_count == 0:
-                _auth_manager.register_user("testuser", "testpass", "Test User")
-                logger.info("default_user_created", username="testuser")
-        finally:
-            db.close()
-
+    
     return _auth_manager
