@@ -486,9 +486,12 @@ export default function MedRAXPlatform() {
                 if (data.type === 'done' || data.type === 'error') {
                     eventSource.close();
 
-                    // Fetch final results (use currentChatId if available)
-                    const analysisId = currentChatId || sessionId;
-                    axios.get(`${API_BASE}/api/analysis/${analysisId}`)
+                    // Fetch final results (use appropriate endpoint based on architecture)
+                    const resultsUrl = currentChatId
+                        ? `${API_BASE}/api/users/${userId}/chats/${currentChatId}/results`
+                        : `${API_BASE}/api/analysis/${sessionId}`;
+                    
+                    axios.get(resultsUrl)
                         .then(resultsResponse => {
                             console.log('✅ Analysis results received:', resultsResponse.data);
                             const results = resultsResponse.data.results || {};

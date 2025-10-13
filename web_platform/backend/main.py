@@ -978,6 +978,30 @@ async def stream_chat_analysis(user_id: str, chat_id: str, image_path: str = Que
         }
     )
 
+@app.get("/api/users/{user_id}/chats/{chat_id}/results")
+async def get_chat_analysis_results(user_id: str, chat_id: str):
+    """Get analysis results for a specific chat"""
+    chat_interface = session_manager.get_chat(user_id, chat_id)
+    if not chat_interface:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    # Return stored tool results from the chat interface
+    results = {}
+    for tool_name, tool_data in chat_interface.latest_tool_results.items():
+        results[tool_name] = ensure_json_serializable(tool_data)
+
+    logger.info("results_fetched",
+               chat_id=chat_id[:8],
+               tool_count=len(results),
+               tools=list(results.keys()))
+
+    return {
+        "results": results,
+        "chat_id": chat_id,
+        "user_id": user_id,
+        "count": len(results)
+    }
+
 @app.delete("/api/users/{user_id}/chats/{chat_id}")
 async def delete_user_chat(user_id: str, chat_id: str):
     """Delete a specific chat"""
