@@ -932,25 +932,34 @@ async def stream_chat_analysis(user_id: str, chat_id: str, image_path: str = Que
         try:
             # Send initial status
             yield f"data: {json.dumps({'type': 'status', 'message': '🤖 Starting AI analysis...'})}\n\n"
+            await asyncio.sleep(0.1)  # Small delay to ensure message is sent
 
             # Process the message (empty message triggers analysis with uploaded images)
             responses = []
-            async for response in chat_interface.process_message(
-                "Please analyze these medical images comprehensively.",
-                image_path
-            ):
-                # Parse tool events
-                if response.startswith("__TOOL_START__"):
-                    tool_name = response.replace("__TOOL_START__", "").replace("__", "")
-                    yield f"data: {json.dumps({'type': 'status', 'message': f'🔧 Running: {tool_name}...'})}\n\n"
-                elif response.startswith("__TOOL_DONE__"):
-                    tool_name = response.replace("__TOOL_DONE__", "").replace("__", "")
-                    yield f"data: {json.dumps({'type': 'status', 'message': f'✅ Completed: {tool_name}'})}\n\n"
-                else:
-                    responses.append(response)
+            try:
+                async for response in chat_interface.process_message(
+                    "Please analyze these medical images comprehensively.",
+                    image_path
+                ):
+                    # Parse tool events
+                    if response.startswith("__TOOL_START__"):
+                        tool_name = response.replace("__TOOL_START__", "").replace("__", "")
+                        yield f"data: {json.dumps({'type': 'status', 'message': f'🔧 Running: {tool_name}...'})}\n\n"
+                        await asyncio.sleep(0.1)
+                    elif response.startswith("__TOOL_DONE__"):
+                        tool_name = response.replace("__TOOL_DONE__", "").replace("__", "")
+                        yield f"data: {json.dumps({'type': 'status', 'message': f'✅ Completed: {tool_name}'})}\n\n"
+                        await asyncio.sleep(0.1)
+                    else:
+                        responses.append(response)
+            except Exception as process_error:
+                logger.error("process_message_error", error=str(process_error), exc_info=True)
+                yield f"data: {json.dumps({'type': 'error', 'message': f'❌ Processing error: {str(process_error)}'})}\n\n"
+                return
 
             # Send completion status
             yield f"data: {json.dumps({'type': 'done', 'message': '✅ Analysis complete!'})}\n\n"
+            await asyncio.sleep(0.1)
 
         except Exception as e:
             logger.error("stream_error", error=str(e), exc_info=True)
@@ -962,7 +971,10 @@ async def stream_chat_analysis(user_id: str, chat_id: str, image_path: str = Que
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
+            "X-Accel-Buffering": "no",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type"
         }
     )
 
