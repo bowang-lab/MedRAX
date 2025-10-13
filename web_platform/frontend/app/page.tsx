@@ -544,7 +544,7 @@ export default function MedRAXPlatform() {
                         }
 
                         summaryMessage += '---\n\n';
-                        summaryMessage += '*View detailed results in the panel on the left.*';
+                        summaryMessage += '*View detailed tool outputs in the panel on the right.*';
 
                         // Add the summary to chat
                         setMessages(prev => [...prev, {
@@ -673,7 +673,7 @@ export default function MedRAXPlatform() {
 
     // Sidebar resize handlers
     const MIN_SIDEBAR_WIDTH = 200;
-    const MAX_SIDEBAR_WIDTH = 600;
+    const MAX_SIDEBAR_WIDTH = 400; // Reduced from 600 to prevent excessive stretching
 
     const startResize = (sidebar: string) => (e: React.MouseEvent) => {
         e.preventDefault();
@@ -807,7 +807,11 @@ export default function MedRAXPlatform() {
             {patientSidebarCollapsed && (
                 <button
                     onClick={() => setPatientSidebarCollapsed(false)}
-                    className="fixed left-0 top-1/2 -translate-y-1/2 z-30 bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 text-white p-3 rounded-r-xl border border-l-0 border-blue-500/50 transition-all duration-200 hover:scale-110 shadow-xl shadow-blue-500/50 hover:shadow-2xl hover:shadow-blue-500/60"
+                    className="fixed left-0 z-30 bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 text-white p-3 rounded-r-xl border border-l-0 border-blue-500/50 transition-all duration-200 hover:scale-110 shadow-xl shadow-blue-500/50 hover:shadow-2xl hover:shadow-blue-500/60"
+                    style={{
+                        top: chatSidebarCollapsed ? '50%' : 'calc(50% - 3.5rem)',
+                        transform: 'translateY(-50%)'
+                    }}
                     title="Show Patients"
                 >
                     <ChevronRight className="h-5 w-5" />
@@ -818,10 +822,11 @@ export default function MedRAXPlatform() {
             {chatSidebarCollapsed && (
                 <button
                     onClick={() => setChatSidebarCollapsed(false)}
-                    className="fixed top-1/2 -translate-y-1/2 z-30 bg-gradient-to-r from-emerald-600 to-blue-600 hover:from-emerald-500 hover:to-blue-500 text-white p-3 rounded-r-xl border border-l-0 border-emerald-500/50 transition-all duration-200 hover:scale-110 shadow-xl shadow-emerald-500/50 hover:shadow-2xl shadow-emerald-500/60"
+                    className="fixed z-30 bg-gradient-to-r from-emerald-600 to-blue-600 hover:from-emerald-500 hover:to-blue-500 text-white p-3 rounded-r-xl border border-l-0 border-emerald-500/50 transition-all duration-200 hover:scale-110 shadow-xl shadow-emerald-500/50 hover:shadow-2xl shadow-emerald-500/60"
                     style={{
                         left: `${patientSidebarCollapsed ? 0 : patientSidebarWidth}px`,
-                        transform: patientSidebarCollapsed ? 'translate(0, 3rem)' : 'translateY(-50%)'
+                        top: patientSidebarCollapsed ? 'calc(50% + 3.5rem)' : '50%',
+                        transform: 'translateY(-50%)'
                     }}
                     title="Show Conversations"
                 >

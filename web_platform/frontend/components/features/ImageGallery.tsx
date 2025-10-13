@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Image as ImageIcon, X, Upload } from 'lucide-react';
+import { Image as ImageIcon, X, Upload, Maximize2 } from 'lucide-react';
+import ImageModal from '../ui/ImageModal';
 
 interface ImageGalleryProps {
     images: string[];
@@ -21,6 +22,7 @@ export default function ImageGallery({
     onUploadClick
 }: ImageGalleryProps) {
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+    const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
     if (images.length === 0) {
         return (
@@ -86,6 +88,20 @@ export default function ImageGallery({
                             className="w-full h-32 object-cover"
                         />
 
+                        {/* Zoom button on hover */}
+                        {hoveredIndex === idx && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setZoomedImage(img);
+                                }}
+                                className="absolute top-2 right-2 p-1.5 bg-blue-500/80 hover:bg-blue-500 rounded-full transition-colors"
+                                title="View full size"
+                            >
+                                <Maximize2 className="h-3 w-3 text-white" />
+                            </button>
+                        )}
+
                         {/* Delete button on hover */}
                         {hoveredIndex === idx && onDeleteImage && idx !== currentIndex && (
                             <button
@@ -116,6 +132,14 @@ export default function ImageGallery({
                 <Upload className="h-4 w-4" />
                 Add More Images
             </button>
+
+            {/* Image zoom modal */}
+            {zoomedImage && (
+                <ImageModal
+                    imageUrl={`${apiBase}/${zoomedImage}`}
+                    onClose={() => setZoomedImage(null)}
+                />
+            )}
         </div>
     );
 }

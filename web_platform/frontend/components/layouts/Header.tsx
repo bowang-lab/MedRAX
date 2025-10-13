@@ -24,7 +24,7 @@ export default function Header({
 }: HeaderProps) {
     return (
         <div className="bg-zinc-900 border-b border-zinc-800 p-4">
-            <div className="max-w-7xl mx-auto">
+            <div className="w-full">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <div>
