@@ -124,13 +124,16 @@ class Image(Base):
 
 
 class ToolResult(Base):
-    """Tool execution result model"""
+    """Tool execution result model - stores all tool execution history"""
     __tablename__ = "tool_results"
 
-    result_id = Column(String, primary_key=True, index=True)
+    result_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     chat_id = Column(String, ForeignKey("chats.chat_id", ondelete="CASCADE"), nullable=False, index=True)
+    execution_id = Column(String, nullable=False, index=True)  # UUID for this specific execution
+    request_id = Column(String, nullable=True, index=True)  # UUID for the analysis request
     tool_name = Column(String, nullable=False)
     result_data = Column(JSON, nullable=False)  # Stored as JSON
+    metadata = Column(JSON, nullable=True)  # Additional metadata (e.g., image_paths)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships

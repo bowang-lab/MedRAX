@@ -245,7 +245,7 @@ class ChatInterface:
                                     "metadata": metadata_data
                                 }
                                 
-                                # NEW: Append to execution history
+                                # NEW: Append to execution history (in-memory)
                                 execution_record = {
                                     "execution_id": str(uuid.uuid4()),
                                     "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -256,6 +256,36 @@ class ChatInterface:
                                     "metadata": metadata_data
                                 }
                                 self.tool_execution_history.append(execution_record)
+                                
+                                # CRITICAL: Persist to database
+                                try:
+                                    from database import SessionLocal, ToolResult
+                                    db = SessionLocal()
+                                    try:
+                                        db_tool_result = ToolResult(
+                                            chat_id=self.chat_id,
+                                            execution_id=execution_record["execution_id"],
+                                            request_id=self.current_request_id,
+                                            tool_name=tool_name,
+                                            result_data=result_data,
+                                            metadata={
+                                                "image_paths": self.uploaded_files.copy(),
+                                                **metadata_data
+                                            },
+                                            created_at=datetime.now(timezone.utc).replace(tzinfo=None)
+                                        )
+                                        db.add(db_tool_result)
+                                        db.commit()
+                                        logger.info("tool_result_persisted_to_db",
+                                                  execution_id=execution_record["execution_id"][:8],
+                                                  tool_name=tool_name,
+                                                  chat_id=self.chat_id)
+                                    finally:
+                                        db.close()
+                                except Exception as db_error:
+                                    logger.error("tool_result_db_persist_error",
+                                               error=str(db_error),
+                                               tool_name=tool_name)
                                 
                                 logger.info("tool_execution_stored",
                                           execution_id=execution_record["execution_id"][:8],

@@ -806,36 +806,66 @@ async def get_tool_execution_history(
     # Verify authentication
     verify_user_token(token, user_id)
 
-    chat_interface = session_manager.get_chat(user_id, chat_id)
-    if not chat_interface:
-        raise HTTPException(status_code=404, detail="Chat not found")
-
-    # Get filtered history
-    history = chat_interface.get_tool_execution_history(
-        filter_by_image=filter_by_image,
-        filter_by_request=filter_by_request,
-        latest_only=latest_only
-    )
-
-    # Ensure JSON serializable
-    serialized_history = [ensure_json_serializable(record) for record in history]
-
-    logger.info("tool_history_fetched",
-               chat_id=chat_id[:8],
-               total_executions=len(serialized_history),
-               filter_image=filter_by_image is not None,
-               filter_request=filter_by_request is not None,
-               latest_only=latest_only)
-
-    return {
-        "history": serialized_history,
-        "count": len(serialized_history),
-        "filters": {
-            "image": filter_by_image,
-            "request": filter_by_request,
-            "latest_only": latest_only
+    # Load tool results from database
+    from database import SessionLocal, ToolResult
+    db = SessionLocal()
+    try:
+        # Query tool results for this chat
+        query = db.query(ToolResult).filter(ToolResult.chat_id == chat_id)
+        
+        # Apply filters
+        if filter_by_request:
+            query = query.filter(ToolResult.request_id == filter_by_request)
+        
+        if filter_by_image:
+            # Filter by image path in metadata JSON
+            query = query.filter(ToolResult.metadata.contains(filter_by_image))
+        
+        # Order by creation time (newest first)
+        query = query.order_by(ToolResult.created_at.desc())
+        
+        tool_results = query.all()
+        
+        # Convert to dict format
+        history = []
+        seen_tools = set()
+        
+        for result in tool_results:
+            # If latest_only, skip if we've already seen this tool
+            if latest_only and result.tool_name in seen_tools:
+                continue
+            
+            history.append({
+                "execution_id": result.execution_id,
+                "timestamp": result.created_at.isoformat() if result.created_at else None,
+                "request_id": result.request_id,
+                "tool_name": result.tool_name,
+                "image_paths": result.metadata.get("image_paths", []) if result.metadata else [],
+                "result": result.result_data,
+                "metadata": result.metadata or {}
+            })
+            
+            if latest_only:
+                seen_tools.add(result.tool_name)
+        
+        logger.info("tool_history_fetched_from_db",
+                   chat_id=chat_id[:8],
+                   total_executions=len(history),
+                   filter_image=filter_by_image is not None,
+                   filter_request=filter_by_request is not None,
+                   latest_only=latest_only)
+        
+        return {
+            "history": history,
+            "count": len(history),
+            "filters": {
+                "image": filter_by_image,
+                "request": filter_by_request,
+                "latest_only": latest_only
+            }
         }
-    }
+    finally:
+        db.close()
 
 @app.delete("/api/users/{user_id}/chats/{chat_id}")
 async def delete_user_chat(user_id: str, chat_id: str, token: Optional[str] = Query(None)):
