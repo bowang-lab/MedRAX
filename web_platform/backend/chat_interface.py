@@ -162,7 +162,8 @@ class ChatInterface:
             self.chat_metadata["message_count"] += 1
 
         try:
-            responses = []
+            responses = []  # For actual AI responses (not tool execution messages)
+            tool_execution_messages = []  # Separate list for tool execution status messages
             self.last_tool_calls = []  # Reset for this message
 
             # Check if agent is available
@@ -285,7 +286,8 @@ class ChatInterface:
                                 tool_done_msg = f"__TOOL_DONE__{tool_name}__"
                                 yield tool_done_msg
 
-                                responses.append(tool_response)
+                                # Add to tool execution messages (NOT to responses - these shouldn't be in chat history)
+                                tool_execution_messages.append(tool_response)
                                 yield tool_response
 
                             # Update display path for image visualizer
