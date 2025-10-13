@@ -427,12 +427,12 @@ export default function MedRAXPlatform() {
         }
 
         setIsAnalyzing(true);
-        
+
         // Show which images are being analyzed
-        const imageCountMsg = uploadedImages.length === 1 
-            ? '1 image' 
+        const imageCountMsg = uploadedImages.length === 1
+            ? '1 image'
             : `${uploadedImages.length} images`;
-        
+
         setMessages(prev => [...prev, {
             role: 'system',
             content: `🤖 Starting comprehensive AI analysis of **${imageCountMsg}**...\n\n📊 This will analyze ALL uploaded images together and provide:\n- Pathology classification\n- Anatomical segmentation\n- Detailed radiology report\n- Clinical recommendations`,
@@ -475,72 +475,72 @@ export default function MedRAXPlatform() {
                         axios.get(resultsUrl),
                         axios.get(historyUrl)
                     ]).then(([resultsResponse, historyResponse]) => {
-                            console.log('✅ Analysis results received:', resultsResponse.data);
-                            const results = resultsResponse.data.results || {};
-                            console.log('📊 Results count:', Object.keys(results).length);
-                            console.log('🔧 Tool names:', Object.keys(results));
+                        console.log('✅ Analysis results received:', resultsResponse.data);
+                        const results = resultsResponse.data.results || {};
+                        console.log('📊 Results count:', Object.keys(results).length);
+                        console.log('🔧 Tool names:', Object.keys(results));
 
-                            setAnalysisResults(Object.entries(results));
-                            
-                            // Store full history
-                            const history = historyResponse.data.history || [];
-                            setToolHistory(history);
-                            console.log('📜 Tool history loaded:', history.length, 'executions');
-                            
-                            // Track the latest request ID
-                            if (history.length > 0) {
-                                setCurrentRequestId(history[history.length - 1].request_id);
+                        setAnalysisResults(Object.entries(results));
+
+                        // Store full history
+                        const history = historyResponse.data.history || [];
+                        setToolHistory(history);
+                        console.log('📜 Tool history loaded:', history.length, 'executions');
+
+                        // Track the latest request ID
+                        if (history.length > 0) {
+                            setCurrentRequestId(history[history.length - 1].request_id);
+                        }
+
+                        // Format and add summary message to chat
+                        let summaryMessage = '### 📊 Analysis Complete\n\n';
+
+                        // Add classification results
+                        if (results.chest_xray_classifier) {
+                            const classData = results.chest_xray_classifier.result;
+                            if (classData && typeof classData === 'object') {
+                                summaryMessage += '#### 🔬 Pathology Classification\n';
+                                const predictions = classData.predictions || classData;
+                                const topFindings = Object.entries(predictions)
+                                    .sort((a: any, b: any) => b[1] - a[1])
+                                    .slice(0, 5);
+                                topFindings.forEach(([name, score]: any) => {
+                                    summaryMessage += `- **${name}:** ${(score * 100).toFixed(1)}%\n`;
+                                });
+                                summaryMessage += '\n';
                             }
+                        }
 
-                            // Format and add summary message to chat
-                            let summaryMessage = '### 📊 Analysis Complete\n\n';
-
-                            // Add classification results
-                            if (results.chest_xray_classifier) {
-                                const classData = results.chest_xray_classifier.result;
-                                if (classData && typeof classData === 'object') {
-                                    summaryMessage += '#### 🔬 Pathology Classification\n';
-                                    const predictions = classData.predictions || classData;
-                                    const topFindings = Object.entries(predictions)
-                                        .sort((a: any, b: any) => b[1] - a[1])
-                                        .slice(0, 5);
-                                    topFindings.forEach(([name, score]: any) => {
-                                        summaryMessage += `- **${name}:** ${(score * 100).toFixed(1)}%\n`;
-                                    });
-                                    summaryMessage += '\n';
-                                }
+                        // Add segmentation summary
+                        if (results.chest_xray_segmentation) {
+                            const segData = results.chest_xray_segmentation.result;
+                            if (segData && typeof segData === 'object' && segData.organs) {
+                                summaryMessage += '#### 🫁 Anatomical Segmentation\n';
+                                summaryMessage += `Found ${Object.keys(segData.organs).length} anatomical structures\n\n`;
                             }
+                        }
 
-                            // Add segmentation summary
-                            if (results.chest_xray_segmentation) {
-                                const segData = results.chest_xray_segmentation.result;
-                                if (segData && typeof segData === 'object' && segData.organs) {
-                                    summaryMessage += '#### 🫁 Anatomical Segmentation\n';
-                                    summaryMessage += `Found ${Object.keys(segData.organs).length} anatomical structures\n\n`;
-                                }
+                        // Add report
+                        if (results.chest_xray_report_generator) {
+                            const report = results.chest_xray_report_generator.result;
+                            if (typeof report === 'string') {
+                                summaryMessage += '#### 📝 Radiology Report\n\n';
+                                summaryMessage += report + '\n\n';
                             }
+                        }
 
-                            // Add report
-                            if (results.chest_xray_report_generator) {
-                                const report = results.chest_xray_report_generator.result;
-                                if (typeof report === 'string') {
-                                    summaryMessage += '#### 📝 Radiology Report\n\n';
-                                    summaryMessage += report + '\n\n';
-                                }
-                            }
+                        summaryMessage += '---\n\n';
+                        summaryMessage += '*View detailed results in the panel on the left.*';
 
-                            summaryMessage += '---\n\n';
-                            summaryMessage += '*View detailed results in the panel on the left.*';
+                        // Add the summary to chat
+                        setMessages(prev => [...prev, {
+                            role: 'assistant',
+                            content: summaryMessage,
+                            timestamp: new Date()
+                        }]);
 
-                            // Add the summary to chat
-                            setMessages(prev => [...prev, {
-                                role: 'assistant',
-                                content: summaryMessage,
-                                timestamp: new Date()
-                            }]);
-
-                            setIsAnalyzing(false);
-                        })
+                        setIsAnalyzing(false);
+                    })
                         .catch(err => {
                             console.error('❌ Failed to fetch results:', err);
                             setIsAnalyzing(false);
