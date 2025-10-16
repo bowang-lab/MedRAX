@@ -62,7 +62,7 @@ class ModelFactory:
 
     @classmethod
     def create_model(
-        cls, model_name: str, temperature: float = 0.7, top_p: float = 0.95, **kwargs
+        cls, model_name: str, temperature: float = 0.7, top_p: float = 0.95, max_tokens: int = 5000, **kwargs
     ) -> BaseLanguageModel:
         """Create and return an instance of the appropriate language model.
 
@@ -70,6 +70,7 @@ class ModelFactory:
             model_name (str): Name of the model to create (e.g., 'gpt-4o', 'gemini-2.5-pro')
             temperature (float, optional): Temperature parameter. Defaults to 0.7.
             top_p (float, optional): Top-p sampling parameter. Defaults to 0.95.
+            max_tokens (int, optional): Maximum tokens to generate. Defaults to 5000.
             **kwargs: Additional model-specific parameters
 
         Returns:
@@ -123,12 +124,13 @@ class ModelFactory:
         if provider_prefix in ["openrouter"] and model_name.startswith(f"{provider_prefix}-"):
             actual_model_name = model_name[len(provider_prefix) + 1 :]
 
-        # Handle GPT-5 model
+        # Handle GPT-5 model (special case for GPT-5 models)
         if model_name.startswith("gpt-5"):
             return model_class(
                 model=actual_model_name,
                 temperature=temperature,
                 reasoning_effort="high",
+                max_tokens=max_tokens,
                 **provider_kwargs,
                 **kwargs,
             )
@@ -138,6 +140,7 @@ class ModelFactory:
             model=actual_model_name,
             temperature=temperature,
             top_p=top_p,
+            max_tokens=max_tokens,
             **provider_kwargs,
             **kwargs,
         )

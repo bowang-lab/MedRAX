@@ -40,6 +40,7 @@ def initialize_agent(
     model: str = "gemini-2.5-pro",
     temperature: float = 1.0,
     top_p: float = 0.95,
+    max_tokens: int = 5000,
     rag_config: Optional[RAGConfig] = None,
     model_kwargs: Dict[str, Any] = {},
     system_prompt: str = "MEDICAL_ASSISTANT",
@@ -119,7 +120,7 @@ def initialize_agent(
     # Create the language model using the factory
     try:
         llm = ModelFactory.create_model(
-            model_name=model, temperature=temperature, top_p=top_p, **model_kwargs
+            model_name=model, temperature=temperature, top_p=top_p, max_tokens=max_tokens, **model_kwargs
         )
     except ValueError as e:
         print(f"Error creating language model: {e}")
