@@ -123,6 +123,13 @@ class MedSAM2Tool(BaseTool):
             # Load standard image formats
             image = Image.open(image_path)
             
+            # Properly handle 16-bit grayscale images (common in medical imaging)
+            if image.mode == "I;16":
+                # Convert 16-bit to 8-bit by normalizing to 0-255 range
+                img_array = np.array(image)
+                img_normalized = ((img_array - img_array.min()) / (img_array.max() - img_array.min()) * 255).astype(np.uint8)
+                image = Image.fromarray(img_normalized, mode='L')
+            
             # For medical images, convert to grayscale first if needed, then to RGB
             if image.mode == 'L':  # Grayscale
                 # Convert grayscale to RGB for SAM2

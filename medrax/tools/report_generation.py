@@ -2,6 +2,7 @@ from typing import Any, Dict, Optional, Tuple, Type
 from pydantic import BaseModel, Field
 
 import torch
+import numpy as np
 
 from langchain_core.callbacks import (
     AsyncCallbackManagerForToolRun,
@@ -109,7 +110,16 @@ class ChestXRayReportGeneratorTool(BaseTool):
         Returns:
             torch.Tensor: Processed image tensor ready for model input.
         """
-        image = Image.open(image_path).convert("RGB")
+        image = Image.open(image_path)
+        
+        # Properly handle 16-bit grayscale images (common in medical imaging)
+        if image.mode == "I;16":
+            # Convert 16-bit to 8-bit by normalizing to 0-255 range
+            img_array = np.array(image)
+            img_normalized = ((img_array - img_array.min()) / (img_array.max() - img_array.min()) * 255).astype(np.uint8)
+            image = Image.fromarray(img_normalized, mode='L')
+        
+        image = image.convert("RGB")
         pixel_values = processor(image, return_tensors="pt").pixel_values
 
         expected_size = model.config.encoder.image_size

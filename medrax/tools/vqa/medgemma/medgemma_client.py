@@ -17,7 +17,7 @@ class MedGemmaVQAInput(BaseModel):
     )
     prompt: str = Field(..., description="Question or instruction about the medical images")
     system_prompt: Optional[str] = Field(
-        "You are an expert radiologist.",
+        "You are an expert radiologist who is able to analyze radiological images at any resolution.",
         description="System prompt to set the context for the model",
     )
     max_new_tokens: int = Field(
@@ -87,8 +87,13 @@ class MedGemmaAPIClientTool(BaseTool):
         opened_files = []
         
         for path in image_paths:
+            # Detect correct MIME type based on file extension
+            from pathlib import Path
+            ext = Path(path).suffix.lower()
+            mime_type = "image/png" if ext == ".png" else "image/jpeg"
+            
             with open(path, "rb") as f:
-                files_to_send.append(("images", (os.path.basename(path), f.read(), "image/jpeg")))
+                files_to_send.append(("images", (os.path.basename(path), f.read(), mime_type)))
 
         data = {
             "prompt": prompt,
@@ -132,7 +137,7 @@ class MedGemmaAPIClientTool(BaseTool):
         self,
         image_paths: List[str],
         prompt: str,
-        system_prompt: str = "You are an expert radiologist.",
+        system_prompt: str = "You are an expert radiologist who is able to analyze radiological images at any resolution.",
         max_new_tokens: int = 300,
         run_manager: Optional[CallbackManagerForToolRun] = None,
     ) -> Tuple[Dict[str, Any], Dict]:
@@ -221,7 +226,7 @@ class MedGemmaAPIClientTool(BaseTool):
         self,
         image_paths: List[str],
         prompt: str,
-        system_prompt: str = "You are an expert radiologist.",
+        system_prompt: str = "You are an expert radiologist who is able to analyze radiological images at any resolution.",
         max_new_tokens: int = 300,
         run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
     ) -> Tuple[Dict[str, Any], Dict]:
