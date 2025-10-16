@@ -39,7 +39,7 @@ class Benchmark(ABC):
         self._load_data()
         self._shuffle_data()
 
-        self.max_questions = kwargs.get("max_questions", None)
+        self.max_questions = self.config.get("max_questions", None)
         if self.max_questions:
             self.data_points = self.data_points[:self.max_questions]
             print(f"Randomly sampled {self.max_questions} questions from {self.__class__.__name__}")
@@ -51,12 +51,13 @@ class Benchmark(ABC):
         """Load benchmark data from the data directory."""
         pass
 
-    def _shuffle_data(self, random_seed: Optional[int]=42) -> None:
+    def _shuffle_data(self) -> None:
         """Shuffle the data points if a random seed is provided. If no random seed is provided, use 42 as default.
         
         This method is called automatically after data loading to ensure
         reproducible benchmark runs when a random seed is specified.
         """
+        random_seed = self.config.get("random_seed", 42)
         random.seed(random_seed)
         random.shuffle(self.data_points)
         print(f"Shuffled {len(self.data_points)} data points with seed {random_seed}")
@@ -99,21 +100,3 @@ class Benchmark(ABC):
         for i in range(len(self)):
             yield self.get_data_point(i)
 
-    def validate_images(self) -> Tuple[List[str], List[str]]:
-        """Validate that all image paths exist.
-        
-        Returns:
-            Tuple[List[str], List[str]]: Tuple of (valid_image_paths, invalid_image_paths)
-        """
-        valid_images = []
-        invalid_images = []
-        
-        for dp in self:
-            if dp.images:
-                for image_path in dp.images:
-                    if Path(image_path).exists():
-                        valid_images.append(image_path)
-                    else:
-                        invalid_images.append(image_path)
-        
-        return valid_images, invalid_images

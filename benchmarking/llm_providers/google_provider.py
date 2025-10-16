@@ -14,6 +14,10 @@ class GoogleProvider(LLMProvider):
 
     def _setup(self) -> None:
         """Set up Google langchain client."""
+        # Set provider name
+        self.provider_name = "google"
+
+        # Get API key from environment variable
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             raise ValueError("GOOGLE_API_KEY environment variable is required")
@@ -21,7 +25,10 @@ class GoogleProvider(LLMProvider):
         # Create ChatGoogleGenerativeAI instance
         self.client = ChatGoogleGenerativeAI(
             model=self.model_name,
-            google_api_key=api_key
+            google_api_key=api_key,
+            temperature=self.temperature,
+            max_output_tokens=self.max_tokens,
+            top_p=self.top_p
         )
 
     @retry(wait=wait_exponential(multiplier=1, min=4, max=10), stop=stop_after_attempt(3))
@@ -54,9 +61,10 @@ class GoogleProvider(LLMProvider):
                 try:
                     # For langchain Google, pass image data as base64
                     image_b64 = self._encode_image(image_path)
+                    mime_type = self._get_image_mime_type(image_path)
                     content_parts.append({
                         "type": "image_url",
-                        "image_url": f"data:image/jpeg;base64,{image_b64}"
+                        "image_url": f"data:{mime_type};base64,{image_b64}"
                     })
                 except Exception as e:
                     print(f"Error reading image {image_path}: {e}")
@@ -68,17 +76,12 @@ class GoogleProvider(LLMProvider):
         
         # Make API call using langchain
         try:
-            # Update client parameters for this request
-            self.client.temperature = request.temperature
-            self.client.max_output_tokens = request.max_tokens
-            self.client.top_p = request.top_p
-            
+            # Make API call
             response = self.client.invoke(messages)
-
-            duration = time.time() - start_time
-            
-            # Extract response content
             content = response.content if response.content else ""
+
+            # Calculate duration
+            duration = time.time() - start_time
             
             # Get usage information if available
             usage = {}

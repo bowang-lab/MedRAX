@@ -13,11 +13,16 @@ class OpenRouterProvider(LLMProvider):
 
     def _setup(self) -> None:
         """Set up OpenRouter client models."""
+        # Set provider name
+        self.provider_name = "openrouter"
+
+        # Get API key and base URL from environment variables
         api_key = os.getenv("OPENROUTER_API_KEY")
-        if not api_key:
-            raise ValueError("OPENROUTER_API_KEY environment variable is required for xAI Grok via OpenRouter.")
         base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-        # Use OpenAI SDK with OpenRouter endpoint
+        if not api_key or not base_url:
+            raise ValueError("OPENROUTER_API_KEY and OPENROUTER_BASE_URL environment variables are required")
+        
+        # Create OpenAI client with OpenRouter endpoint
         self.client = OpenAI(api_key=api_key, base_url=base_url)
 
     @retry(wait=wait_exponential(multiplier=1, min=4, max=10), stop=stop_after_attempt(3))
@@ -45,10 +50,11 @@ class OpenRouterProvider(LLMProvider):
             for image_path in valid_images:
                 try:
                     image_b64 = self._encode_image(image_path)
+                    mime_type = self._get_image_mime_type(image_path)
                     user_content.append({
                         "type": "image_url",
                         "image_url": {
-                            "url": f"data:image/jpeg;base64,{image_b64}",
+                            "url": f"data:{mime_type};base64,{image_b64}",
                             "detail": "high"
                         }
                     })
@@ -57,14 +63,14 @@ class OpenRouterProvider(LLMProvider):
         
         messages.append({"role": "user", "content": user_content})
         
+        # Make API call
         try:
             response = self.client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
-                temperature=request.temperature,
-                top_p=request.top_p,
-                max_tokens=request.max_tokens,
-                **(request.additional_params or {})
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+                top_p=self.top_p
             )
             duration = time.time() - start_time
             content = response.choices[0].message.content if response.choices else ""

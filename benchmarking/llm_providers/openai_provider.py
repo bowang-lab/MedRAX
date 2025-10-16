@@ -14,21 +14,28 @@ class OpenAIProvider(LLMProvider):
 
     def _setup(self) -> None:
         """Set up OpenAI langchain client."""
+        # Set provider name
+        self.provider_name = "openai"
+
+        # Get API key and base URL from environment variables
         api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY environment variable is required")
-        
         base_url = os.getenv("OPENAI_BASE_URL")
+        if not api_key or not base_url:
+            raise ValueError("OPENAI_API_KEY and OPENAI_BASE_URL environment variables are required")
         
-        # Create ChatOpenAI instance
+        # Construct kwargs for ChatOpenAI instance
         kwargs = {
             "model": self.model_name,
             "api_key": api_key,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens
         }
-        
         if base_url:
             kwargs["base_url"] = base_url
-            
+        if self.model_name.startswith("gpt-5") or self.model_name.startswith("o1") or self.model_name.startswith("o3"):
+            kwargs["reasoning_effort"] = "high"
+        
+        # Create ChatOpenAI instance
         self.client = ChatOpenAI(**kwargs)
 
     @retry(wait=wait_exponential(multiplier=1, min=4, max=10), stop=stop_after_attempt(3))
@@ -63,10 +70,11 @@ class OpenAIProvider(LLMProvider):
             for image_path in valid_images:
                 try:
                     image_b64 = self._encode_image(image_path)
+                    mime_type = self._get_image_mime_type(image_path)
                     user_content.append({
                         "type": "image_url",
                         "image_url": {
-                            "url": f"data:image/jpeg;base64,{image_b64}",
+                            "url": f"data:{mime_type};base64,{image_b64}",
                             "detail": "high"
                         }
                     })
@@ -75,13 +83,8 @@ class OpenAIProvider(LLMProvider):
         
         messages.append(HumanMessage(content=user_content))
         
-        # Make API call using langchain
+        # Make API call
         try:
-            # Update client parameters for this request
-            self.client.temperature = request.temperature
-            self.client.max_tokens = request.max_tokens
-            self.client.top_p = request.top_p
-            
             response = self.client.invoke(messages)
             
             duration = time.time() - start_time

@@ -48,10 +48,10 @@ class ReXVQABenchmark(Benchmark):
                 max_questions (int): Maximum number of questions to load (default: None, load all)
                 images_dir (str): Directory containing extracted PNG images (default: None)
         """
-        super().__init__(data_dir, **kwargs)
-
         self.split = kwargs.get("split", "test")
         self.images_dir = f"{data_dir}/images/deid_png"
+
+        super().__init__(data_dir, **kwargs)
 
     def _load_data(self) -> None:
         """Load ReXVQA data from HuggingFace."""
