@@ -67,6 +67,48 @@ def resolve_medgemma_api_url(args) -> str:
     return resolve_medgemma_api_url_from_value(getattr(args, "medgemma_api_url", None))
 
 
+def resolve_auth_credentials(args) -> Optional[tuple]:
+    """Resolve authentication credentials from CLI args or environment variables.
+    
+    Resolution order:
+    1) Explicit --no-auth flag (returns None, no warnings)
+    2) Explicit --auth USERNAME PASSWORD (returns credentials tuple)
+    3) MEDRAX_AUTH_USERNAME and MEDRAX_AUTH_PASSWORD environment variables
+    4) Default to None with warning messages
+    
+    Args:
+        args: Parsed command-line arguments
+        
+    Returns:
+        Optional[tuple]: (username, password) tuple if auth is enabled, None otherwise
+    """
+    if args.no_auth:
+        print("⚠️  Authentication disabled (public access)")
+        return None
+    
+    if args.auth:
+        username, password = args.auth
+        print(f"✅ Authentication enabled for user: {username}")
+        return (username, password)
+    
+    # Try to read from environment variables
+    auth_username = os.getenv("MEDRAX_AUTH_USERNAME")
+    auth_password = os.getenv("MEDRAX_AUTH_PASSWORD")
+    
+    if auth_username and auth_password:
+        print(f"✅ Authentication enabled from environment for user: {auth_username}")
+        return (auth_username, auth_password)
+    
+    # No auth specified anywhere - default to no auth with warning
+    print("⚠️  No authentication configured!")
+    print("⚠️  Running without authentication (public access)")
+    print("⚠️  To enable auth, either:")
+    print("    - Use --auth USERNAME PASSWORD")
+    print("    - Set MEDRAX_AUTH_USERNAME and MEDRAX_AUTH_PASSWORD in .env")
+    print("    - Or explicitly use --no-auth to suppress this warning")
+    return None
+
+
 def initialize_agent(
     prompt_file: str,
     tools_to_use: Optional[List[str]] = None,
@@ -265,8 +307,8 @@ def parse_arguments():
     parser.add_argument("--gradio-host", default="0.0.0.0", help="Gradio host address")
     parser.add_argument("--gradio-port", type=int, default=8686, help="Gradio port")
     parser.add_argument("--auth", nargs=2, metavar=("USERNAME", "PASSWORD"), 
-                       default=["admin", "adibjun"],
-                       help="Enable password authentication (default: admin adibjun)")
+                       default=None,
+                       help="Enable password authentication with specified username and password")
     parser.add_argument("--no-auth", action="store_true", 
                        help="Disable authentication (public access)")
     parser.add_argument("--share", action="store_true", 
@@ -394,13 +436,8 @@ if __name__ == "__main__":
     print(f"Selected tools: {selected_tools}")
     print(f"Using system prompt: {args.system_prompt}")
     
-    # Set up authentication (simplified with argparse defaults)
-    if args.no_auth:
-        auth_credentials = None
-        print("⚠️  Authentication disabled (public access)")
-    else:
-        auth_credentials = tuple(args.auth)  # Uses default ["admin", "adibjun"] if not specified
-        print(f"✅ Authentication enabled for user: {auth_credentials[0]}")
+    # Set up authentication (reads from CLI, env vars, or requires explicit choice)
+    auth_credentials = resolve_auth_credentials(args)
 
     # Setup the MedGemma environment if the MedGemmaVQATool is selected
     medgemma_base_url_from_setup: Optional[str] = None
