@@ -220,6 +220,19 @@ export OPENAI_API_KEY="ollama"
 ```
 <br>
 
+### Optional: OpenAI-compatible Providers
+
+MedRAX supports OpenAI-compatible APIs, allowing regional or local LLM providers to serve as alternative backends.
+
+For example, to use **Qwen3-VL** via [Alibaba Cloud DashScope](https://bailian.console.aliyun.com/?tab=model#/model-market), set the following environment variables:
+
+```bash
+export OPENAI_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
+export OPENAI_API_KEY="<your-dashscope-api-key>"
+export OPENAI_MODEL="qwen3-vl-235b-a22b-instruct"
+```
+<br>
+
 ## Star History
 <div align="center">
   
