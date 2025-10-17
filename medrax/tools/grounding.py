@@ -89,11 +89,8 @@ class XRayPhraseGroundingTool(BaseTool):
             trust_remote_code=True,
             quantization_config=quantization_config,
         )
-        self.processor = AutoProcessor.from_pretrained(
-            model_path, cache_dir=cache_dir, trust_remote_code=True
-        )
+        self.processor = AutoProcessor.from_pretrained(model_path, cache_dir=cache_dir, trust_remote_code=True)
 
-        
         self.model = self.model.eval()
 
         self.temp_dir = Path(temp_dir if temp_dir else tempfile.mkdtemp())
@@ -167,12 +164,8 @@ class XRayPhraseGroundingTool(BaseTool):
                 )
 
             prompt_length = inputs["input_ids"].shape[-1]
-            decoded_text = self.processor.decode(
-                output[0][prompt_length:], skip_special_tokens=True
-            )
-            predictions = self.processor.convert_output_to_plaintext_or_grounded_sequence(
-                decoded_text
-            )
+            decoded_text = self.processor.decode(output[0][prompt_length:], skip_special_tokens=True)
+            predictions = self.processor.convert_output_to_plaintext_or_grounded_sequence(decoded_text)
 
             metadata = {
                 "image_path": image_path,
@@ -199,9 +192,7 @@ class XRayPhraseGroundingTool(BaseTool):
                 # Convert model bboxes to list format and get original image bboxes
                 model_bboxes = [list(bbox) for bbox in pred_bboxes]
                 original_bboxes = [
-                    self.processor.adjust_box_for_original_image_size(
-                        bbox, width=image.size[0], height=image.size[1]
-                    )
+                    self.processor.adjust_box_for_original_image_size(bbox, width=image.size[0], height=image.size[1])
                     for bbox in model_bboxes
                 ]
 

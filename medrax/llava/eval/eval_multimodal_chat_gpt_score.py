@@ -14,6 +14,7 @@ INSTRUCT_PROMPT = """We would like to request your feedback on the performance o
   Please first output a single line containing only two values indicating the scores for Assistant 1 and 2, respectively. The two scores are separated by a space. In the subsequent line, please provide a comprehensive explanation of your evaluation, avoiding any potential bias and ensuring that the order in which the responses were presented does not affect your judgment."""
 ROLE = "Assistant"
 
+
 # Generate instruction for GPT-4 to score the two answers.
 def conv_to_str(fig_label, fig_caption, fig_context, question, ans1, ans2):
     return (
@@ -127,17 +128,13 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("GPT-4 Multimodal Chat Scoring", add_help=True)
-    parser.add_argument(
-        "--answers-file", default="", metavar="FILE", help="path to model answer file"
-    )
+    parser.add_argument("--answers-file", default="", metavar="FILE", help="path to model answer file")
     parser.add_argument(
         "--question-file",
         default="data/questions/llava_med_eval_qa50_qa.jsonl",
         metavar="FILE",
         help="path to multichat questions file",
     )
-    parser.add_argument(
-        "--scores-file", default="", metavar="FILE", help="path to save gpt-4 score file"
-    )
+    parser.add_argument("--scores-file", default="", metavar="FILE", help="path to save gpt-4 score file")
     args = parser.parse_args()
     main(args)

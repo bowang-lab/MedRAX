@@ -18,9 +18,7 @@ from medrax.utils.utils import preprocess_medical_image
 class TorchXRayVisionInput(BaseModel):
     """Input for TorchXRayVision chest X-ray analysis tools. Only supports JPG or PNG images."""
 
-    image_path: str = Field(
-        ..., description="Path to the radiology image file, only supports JPG or PNG images"
-    )
+    image_path: str = Field(..., description="Path to the radiology image file, only supports JPG or PNG images")
 
 
 class TorchXRayVisionClassifierTool(BaseTool):

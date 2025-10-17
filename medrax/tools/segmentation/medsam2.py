@@ -26,7 +26,6 @@ from hydra import initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
 
 
-
 class MedSAM2Input(BaseModel):
     """Input schema for the MedSAM2 Tool."""
 
@@ -47,7 +46,7 @@ class MedSAM2Input(BaseModel):
 
 class MedSAM2Tool(BaseTool):
     """Advanced medical image segmentation tool using MedSAM2.
-    
+
     This tool provides state-of-the-art medical image segmentation capabilities using
     the MedSAM2 model, which is specifically adapted for medical imaging from Meta's SAM2.
     Supports interactive prompting with boxes, points, or automatic segmentation.
@@ -92,22 +91,17 @@ class MedSAM2Tool(BaseTool):
             # This works around the issue with initialize_config_module in sam2
             if GlobalHydra.instance().is_initialized():
                 GlobalHydra.instance().clear()
-            
+
             config_dir = Path(__file__).parent.parent.parent.parent / "MedSAM2" / "sam2" / "configs"
             initialize_config_dir(config_dir=str(config_dir), version_base="1.2")
-            
+
             hf_hub_download(
-                repo_id=model_path,
-                filename=model_file,
-                local_dir=self.cache_dir,
-                local_dir_use_symlinks=False
+                repo_id=model_path, filename=model_file, local_dir=self.cache_dir, local_dir_use_symlinks=False
             )
 
-            config_path = model_cfg.replace('.yaml', '')
+            config_path = model_cfg.replace(".yaml", "")
             sam2_model = build_sam2(config_path, str(self.cache_dir / model_file), device=device)
             self.predictor = SAM2ImagePredictor(sam2_model)
-            
-            print(f"MedSAM2 model loaded successfully on {device}")
 
         except Exception as e:
             raise RuntimeError(f"Failed to initialize MedSAM2: {str(e)}")
@@ -116,37 +110,37 @@ class MedSAM2Tool(BaseTool):
         """Load and preprocess image for medical analysis."""
         try:
             # Handle different image formats
-            if image_path.lower().endswith('.dcm'):
+            if image_path.lower().endswith(".dcm"):
                 # DICOM files - would need DICOM processor
                 raise ValueError("DICOM files not directly supported. Please convert to standard image format first.")
-            
+
             # Load standard image formats
             image = Image.open(image_path)
-            
+
             # For medical images, convert to grayscale first if needed, then to RGB
-            if image.mode == 'L':  # Grayscale
+            if image.mode == "L":  # Grayscale
                 # Convert grayscale to RGB for SAM2
-                image = image.convert('RGB')
-            elif image.mode != 'RGB':
-                if image.mode == 'RGBA':
+                image = image.convert("RGB")
+            elif image.mode != "RGB":
+                if image.mode == "RGBA":
                     # Create white background for RGBA
-                    background = Image.new('RGB', image.size, (255, 255, 255))
+                    background = Image.new("RGB", image.size, (255, 255, 255))
                     background.paste(image, mask=image.split()[-1])
                     image = background
                 else:
-                    image = image.convert('RGB')
-            
+                    image = image.convert("RGB")
+
             # Convert to numpy array
             image_np = np.array(image)
-            
+
             # Ensure image is in proper range [0, 255]
             if image_np.max() <= 1.0:
                 image_np = (image_np * 255).astype(np.uint8)
             else:
                 image_np = image_np.astype(np.uint8)
-            
+
             return image_np
-            
+
         except Exception as e:
             raise ValueError(f"Failed to load image {image_path}: {str(e)}")
 
@@ -154,55 +148,53 @@ class MedSAM2Tool(BaseTool):
         """Process and validate prompts."""
         if prompt_type == "auto":
             return None, None, None
-        
+
         if prompt_coords is None:
             if prompt_type != "auto":
                 raise ValueError(f"Prompt coordinates required for prompt type '{prompt_type}'")
             return None, None, None
-        
+
         if prompt_type == "box":
             if len(prompt_coords) != 4:
                 raise ValueError("Box prompt requires 4 coordinates: [x1,y1,x2,y2]")
-            
+
             x1, y1, x2, y2 = prompt_coords
             # Validate coordinates
             if x1 >= x2 or y1 >= y2:
                 raise ValueError("Invalid box coordinates: x1 < x2 and y1 < y2 required")
-            
+
             input_box = np.array([[x1, y1, x2, y2]])
             return input_box, None, None
-        
+
         elif prompt_type == "point":
             if len(prompt_coords) != 2:
                 raise ValueError("Point prompt requires 2 coordinates: [x,y]")
-            
+
             x, y = prompt_coords
             input_point = np.array([[x, y]])
             input_label = np.array([1])  # Positive point
             return None, input_point, input_label
-        
+
         else:
             raise ValueError(f"Unknown prompt type: {prompt_type}")
 
     def _create_visualization(self, image: np.ndarray, masks: np.ndarray, prompt_info: Dict) -> str:
         """Create visualization of segmentation results."""
         plt.figure(figsize=(10, 10))
-        
+
         # Convert RGB image to grayscale for background display
         if len(image.shape) == 3:
             # Convert RGB to grayscale using standard luminance formula
-            gray_image = 0.299 * image[:,:,0] + 0.587 * image[:,:,1] + 0.114 * image[:,:,2]
+            gray_image = 0.299 * image[:, :, 0] + 0.587 * image[:, :, 1] + 0.114 * image[:, :, 2]
         else:
             gray_image = image
-        
+
         # Display grayscale background
-        plt.imshow(
-            gray_image, cmap="gray", extent=[0, image.shape[1], image.shape[0], 0]
-        )
-        
+        plt.imshow(gray_image, cmap="gray", extent=[0, image.shape[1], image.shape[0], 0])
+
         # Generate color palette for multiple masks
         colors = plt.cm.rainbow(np.linspace(0, 1, len(masks)))
-        
+
         # Process and overlay each mask
         for idx, (mask, color) in enumerate(zip(masks, colors)):
             if mask.sum() > 0:
@@ -210,33 +202,31 @@ class MedSAM2Tool(BaseTool):
                 mask_bool = mask.astype(bool)
                 colored_mask = np.zeros((*mask_bool.shape, 4))
                 colored_mask[mask_bool] = (*color[:3], 0.3)  # 30% transparency like segmentation tool
-                plt.imshow(
-                    colored_mask, extent=[0, image.shape[1], image.shape[0], 0]
-                )
-                
+                plt.imshow(colored_mask, extent=[0, image.shape[1], image.shape[0], 0])
+
                 # Add legend entry for each mask
                 mask_label = f"Mask {idx + 1} (score: {prompt_info.get('scores', [0])[idx] if idx < len(prompt_info.get('scores', [])) else 0:.3f})"
                 plt.plot([], [], color=color, label=mask_label, linewidth=3)
-        
+
         # Add prompt visualization with consistent styling
-        if prompt_info.get('box') is not None:
-            box = prompt_info['box'][0]
+        if prompt_info.get("box") is not None:
+            box = prompt_info["box"][0]
             x1, y1, x2, y2 = box
-            plt.plot([x1, x2, x2, x1, x1], [y1, y1, y2, y2, y1], 'g-', linewidth=2, label='Box Prompt')
-        
-        if prompt_info.get('point') is not None:
-            point = prompt_info['point'][0]
-            plt.plot(point[0], point[1], 'go', markersize=10, label='Point Prompt')
-        
+            plt.plot([x1, x2, x2, x1, x1], [y1, y1, y2, y2, y1], "g-", linewidth=2, label="Box Prompt")
+
+        if prompt_info.get("point") is not None:
+            point = prompt_info["point"][0]
+            plt.plot(point[0], point[1], "go", markersize=10, label="Point Prompt")
+
         plt.title("Segmentation Overlay")
         plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
         plt.axis("off")
-        
+
         # Save visualization with higher DPI like segmentation tool
         viz_path = self.temp_dir / f"medsam2_result_{uuid.uuid4().hex[:8]}.png"
-        plt.savefig(viz_path, bbox_inches='tight', dpi=300)
+        plt.savefig(viz_path, bbox_inches="tight", dpi=300)
         plt.close()
-        
+
         return str(viz_path)
 
     def _run(
@@ -251,28 +241,28 @@ class MedSAM2Tool(BaseTool):
         try:
             # Load image
             image = self._load_image(image_path)
-            
+
             # Set image for predictor
             self.predictor.set_image(image)
-            
+
             # Process prompts
-            input_box, input_point, input_label = self._process_prompts(
-                prompt_type, prompt_coords, image.shape[:2]
-            )
-            
+            input_box, input_point, input_label = self._process_prompts(prompt_type, prompt_coords, image.shape[:2])
+
             # Run inference
             if prompt_type == "auto":
                 # For auto segmentation, try multiple approaches and select best result
                 h, w = image.shape[:2]
-                
+
                 # Try multiple points in key areas for medical images
-                sample_points = np.array([
-                    [w//3, h//3],      # Upper left lung area
-                    [2*w//3, h//3],    # Upper right lung area
-                    [w//2, 2*h//3],    # Lower center area
-                ])
+                sample_points = np.array(
+                    [
+                        [w // 3, h // 3],  # Upper left lung area
+                        [2 * w // 3, h // 3],  # Upper right lung area
+                        [w // 2, 2 * h // 3],  # Lower center area
+                    ]
+                )
                 sample_labels = np.array([1, 1, 1])  # All positive points
-                
+
                 masks, scores, logits = self.predictor.predict(
                     point_coords=sample_points,
                     point_labels=sample_labels,
@@ -285,29 +275,29 @@ class MedSAM2Tool(BaseTool):
                     box=input_box,
                     multimask_output=True,
                 )
-            
+
             # Create visualization
             prompt_info = {
-                'box': input_box,
-                'point': input_point,
-                'type': prompt_type,
-                'scores': scores  # Add scores for legend display
+                "box": input_box,
+                "point": input_point,
+                "type": prompt_type,
+                "scores": scores,  # Add scores for legend display
             }
             viz_path = self._create_visualization(image, masks, prompt_info)
-            
+
             # Create output dictionary (main results)
             output = {
                 "segmentation_image_path": viz_path,
-                "confidence_scores": scores.tolist() if hasattr(scores, 'tolist') else list(scores),
+                "confidence_scores": scores.tolist() if hasattr(scores, "tolist") else list(scores),
                 "num_masks": len(masks),
                 "best_mask_score": float(scores[0]) if len(scores) > 0 else 0.0,
                 "mask_summary": {
                     "total_masks": len(masks),
                     "mask_shapes": [list(mask.shape) for mask in masks],
-                    "segmented_area_pixels": [int(mask.sum()) for mask in masks]
+                    "segmented_area_pixels": [int(mask.sum()) for mask in masks],
                 },
             }
-            
+
             # Create metadata dictionary
             metadata = {
                 "image_path": image_path,
@@ -319,9 +309,9 @@ class MedSAM2Tool(BaseTool):
                 "num_masks_generated": len(masks),
                 "analysis_status": "completed",
             }
-            
+
             return output, metadata
-            
+
         except Exception as e:
             error_output = {"error": str(e)}
             error_metadata = {
@@ -340,4 +330,4 @@ class MedSAM2Tool(BaseTool):
         run_manager: Optional[AsyncCallbackManagerForToolRun] = None,
     ) -> Tuple[Dict[str, Any], Dict]:
         """Async version of _run."""
-        return self._run(image_path, prompt_type, prompt_coords, slice_index, run_manager) 
+        return self._run(image_path, prompt_type, prompt_coords, slice_index, run_manager)

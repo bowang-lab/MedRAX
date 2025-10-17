@@ -21,9 +21,7 @@ class LLM(abc.ABC):
         raise NotImplementedError("Subclasses should implement this!")
 
     @abstractmethod
-    def split_input(
-        self, fixed_instruction, few_shot_examples, splittable_input, input_header, output_header
-    ):
+    def split_input(self, fixed_instruction, few_shot_examples, splittable_input, input_header, output_header):
         raise NotImplementedError("Subclasses should implement this!")
 
 
@@ -49,9 +47,7 @@ class GPT(LLM):
     def __init__(self, model_id):
         self.temperature = 0.0
         self.top_k = 1
-        self.encoding = tiktoken.encoding_for_model(
-            "-".join(model_id.split("-", 2)[:2]).replace("5", ".5")
-        )
+        self.encoding = tiktoken.encoding_for_model("-".join(model_id.split("-", 2)[:2]).replace("5", ".5"))
         self.openai_api = "default"
         self.model_id = model_id
         self.max_length = self.deployment_max_length_dict[model_id]
@@ -61,9 +57,7 @@ class GPT(LLM):
             azure_endpoint=self.openai_cxn_dict[self.openai_api]["endpoint"],
         )
 
-    def gen_messages(
-        self, fixed_instruction, few_shot_examples, input, input_header, output_header
-    ):
+    def gen_messages(self, fixed_instruction, few_shot_examples, input, input_header, output_header):
         messages = [
             {
                 "role": "system",
@@ -120,18 +114,13 @@ class GPT(LLM):
     ):
         return asyncio.run(self.dispatch_openai_requests(messages_list))
 
-    def split_input(
-        self, fixed_instruction, few_shot_examples, splittable_input, input_header, output_header
-    ):
+    def split_input(self, fixed_instruction, few_shot_examples, splittable_input, input_header, output_header):
         # Tokenize fixed_prompt
         fixed_token_ids = self.encoding.encode(
-            fixed_instruction
-            + " ".join([x["user"] + " " + x["assistant"] for x in few_shot_examples])
+            fixed_instruction + " ".join([x["user"] + " " + x["assistant"] for x in few_shot_examples])
         )
         # Calculate remaining token length
-        remaining_token_len = math.ceil(
-            (self.prompt_percent * self.max_length) - len(fixed_token_ids)
-        )
+        remaining_token_len = math.ceil((self.prompt_percent * self.max_length) - len(fixed_token_ids))
 
         # Tokenize splittable_input
         split_token_ids = self.encoding.encode(splittable_input)
@@ -141,14 +130,10 @@ class GPT(LLM):
             split_token_ids[i : i + remaining_token_len + 10]
             for i in range(0, len(split_token_ids), remaining_token_len)
         ]
-        split_input_list = [
-            self.encoding.decode(split_token_ids) for split_token_ids in split_token_ids_list
-        ]
+        split_input_list = [self.encoding.decode(split_token_ids) for split_token_ids in split_token_ids_list]
 
         # Take the fixed_prompt, few_shot_examples, splitted inputs, and input/output headers and generate list of prompt strings.
         return [
-            self.gen_messages(
-                fixed_instruction, few_shot_examples, split_input, input_header, output_header
-            )
+            self.gen_messages(fixed_instruction, few_shot_examples, split_input, input_header, output_header)
             for split_input in split_input_list
         ]

@@ -1,5 +1,6 @@
 """MedRAX LLM provider implementation."""
 
+import os
 import time
 import re
 
@@ -68,7 +69,7 @@ class MedRAXProvider(LLMProvider):
                 tools_to_use=selected_tools,
                 model_dir="/home/lijunzh3/scratch/MedRAX2/model-weights",
                 temp_dir="temp",  # Change this to the path of the temporary directory
-                device="cuda:0",
+                device=os.getenv("MEDRAX_DEVICE", "cuda:0"),
                 model=self.model_name,  # Change this to the model you want to use, e.g. gpt-4.1-2025-04-14, gemini-2.5-pro
                 temperature=self.temperature,
                 top_p=self.top_p,

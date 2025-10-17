@@ -14,7 +14,7 @@ class RAGTool(BaseTool):
 
     The knowledge base includes:
     - Medical textbooks and reference materials
-    - Research papers and clinical studies  
+    - Research papers and clinical studies
     - Medical manuals and guidelines
     - Specialized medical literature
 

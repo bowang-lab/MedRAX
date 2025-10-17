@@ -1,11 +1,9 @@
 import asyncio
 import os
 from pathlib import Path
-import sys
 import traceback
 from typing import Any, Dict, List, Optional, Tuple
 import uuid
-
 from PIL import Image
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -20,6 +18,7 @@ UPLOAD_DIR = "./medgemma_images"
 
 # Create directories if they don't exist
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
 
 # Pydantic Models for API
 class VQAInput(BaseModel):
@@ -99,7 +98,7 @@ class MedGemmaModel:
         device: Optional[str] = "cuda",
         dtype: torch.dtype = torch.bfloat16,
         cache_dir: Optional[str] = None,
-        load_in_4bit: bool = True,
+        load_in_8bit: bool = True,
         **kwargs: Any,
     ) -> None:
         """Initialize the MedGemmaModel.
@@ -109,7 +108,7 @@ class MedGemmaModel:
             device: Device to run model on - "cuda" or "cpu" (default: "cuda")
             dtype: Data type for model weights - bfloat16 recommended for efficiency (default: torch.bfloat16)
             cache_dir: Directory to cache downloaded models (default: None)
-            load_in_4bit: Whether to load model in 4-bit quantization for memory efficiency (default: True)
+            load_in_8bit: Whether to load model in 4-bit quantization for memory efficiency (default: True)
             **kwargs: Additional arguments passed to the model pipeline
 
         Raises:
@@ -139,8 +138,8 @@ class MedGemmaModel:
             "use_cache": True,
         }
 
-        if load_in_4bit:
-            model_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_4bit=True)
+        if load_in_8bit:
+            model_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
         model_kwargs["device_map"] = {"": self.device}
 
         try:
@@ -289,6 +288,12 @@ app = FastAPI(
 )
 
 medgemma_model: Optional[MedGemmaModel] = None
+inference_semaphore: Optional[asyncio.Semaphore] = None
+
+@app.get("/health")
+async def health():
+    """Health check endpoint."""
+    return {"status": "ok"}
 
 @app.on_event("startup")
 async def startup_event():
@@ -307,7 +312,32 @@ async def startup_event():
     """
     global medgemma_model
     try:
-        medgemma_model = MedGemmaModel()
+        # Allow overriding Hugging Face cache directory and device via env vars
+        cache_dir_env = os.getenv("MEDGEMMA_CACHE_DIR")
+        device_env = os.getenv("MEDGEMMA_DEVICE")
+        max_concurrency_env = os.getenv("MEDGEMMA_MAX_CONCURRENCY", "1")
+
+        # Ensure the cache directory is writable; if not, fall back to a user cache
+        if cache_dir_env:
+            try:
+                os.makedirs(cache_dir_env, exist_ok=True)
+                if not os.access(cache_dir_env, os.W_OK):
+                    raise PermissionError("Cache dir not writable")
+            except Exception:
+                fallback = os.path.join(Path.home(), ".cache", "medrax", "medgemma")
+                os.makedirs(fallback, exist_ok=True)
+                print(f"Warning: MEDGEMMA_CACHE_DIR '{cache_dir_env}' not writable. Falling back to '{fallback}'.")
+                cache_dir_env = fallback
+
+        medgemma_model = MedGemmaModel(cache_dir=cache_dir_env, device=device_env)
+        # Initialize concurrency gate
+        try:
+            max_concurrency = int(max_concurrency_env)
+        except ValueError:
+            max_concurrency = 1
+        max_concurrency = max(1, max_concurrency)
+        global inference_semaphore
+        inference_semaphore = asyncio.Semaphore(max_concurrency)
         print("MedGemma model loaded successfully.")
     except RuntimeError as e:
         print(f"Error loading MedGemma model: {e}")
@@ -380,8 +410,12 @@ async def analyze_images(
             raise HTTPException(status_code=500, detail=f"Failed to save uploaded image: {str(e)}")
 
     try:
-        # Generate AI analysis
-        response_text = await medgemma_model.aget_response(image_paths, prompt, system_prompt, max_new_tokens)
+        # Generate AI analysis with concurrency gating to avoid GPU contention timeouts
+        global inference_semaphore
+        if inference_semaphore is None:
+            inference_semaphore = asyncio.Semaphore(1)
+        async with inference_semaphore:
+            response_text = await medgemma_model.aget_response(image_paths, prompt, system_prompt, max_new_tokens)
         
         # Prepare success response
         metadata = {
@@ -419,7 +453,12 @@ async def analyze_images(
 if __name__ == "__main__":
     """Launch the MedGemma VQA API server.
     
-    Starts the FastAPI application with uvicorn server, binding to all
-    network interfaces on port 8002.
+    Reads MEDGEMMA_HOST and MEDGEMMA_PORT if provided; otherwise defaults
+    to 0.0.0.0:8002.
     """
-    uvicorn.run(app, host="0.0.0.0", port=8002)
+    host = os.getenv("MEDGEMMA_HOST", "0.0.0.0")
+    try:
+        port = int(os.getenv("MEDGEMMA_PORT", "8002"))
+    except ValueError:
+        port = 8002
+    uvicorn.run(app, host=host, port=port)

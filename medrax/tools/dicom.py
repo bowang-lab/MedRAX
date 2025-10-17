@@ -14,9 +14,7 @@ class DicomProcessorInput(BaseModel):
     """Input schema for the DICOM Processor Tool."""
 
     dicom_path: str = Field(..., description="Path to the DICOM file")
-    window_center: Optional[float] = Field(
-        None, description="Window center for contrast adjustment"
-    )
+    window_center: Optional[float] = Field(None, description="Window center for contrast adjustment")
     window_width: Optional[float] = Field(None, description="Window width for contrast adjustment")
 
 
