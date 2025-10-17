@@ -2,6 +2,7 @@
 
 import time
 import re
+import uuid
 
 from .base import LLMProvider, LLMRequest, LLMResponse
 from langchain_core.messages import AIMessage, HumanMessage
@@ -35,15 +36,14 @@ class MedRAXProvider(LLMProvider):
             print("Starting server...")
 
             selected_tools = [
-                # "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
-                # "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
-                # "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
-                # "XRayPhraseGroundingTool",  # For locating described features in X-rays
-                # "MedGemmaVQATool", # Google MedGemma VQA tool
-                # "XRayVQATool",  # For visual question answering on X-rays
-                # "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
-                # "WebBrowserTool",  # For web browsing and search capabilities
-                # "DuckDuckGoSearchTool",  # For privacy-focused web search using DuckDuckGo
+                "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
+                "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
+                "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
+                "XRayPhraseGroundingTool",  # For locating described features in X-rays
+                "MedGemmaVQATool", # Google MedGemma VQA tool
+                "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
+                "WebBrowserTool",  # For web browsing and search capabilities
+                "DuckDuckGoSearchTool",  # For privacy-focused web search using DuckDuckGo
             ]
 
             rag_config = RAGConfig(
@@ -107,7 +107,7 @@ class MedRAXProvider(LLMProvider):
         try:
             # Build messages for the agent
             messages = []
-            thread_id = str(int(time.time() * 1000))  # Unique thread ID
+            thread_id = str(uuid.uuid4())  # Globally unique thread ID (thread-safe)
             
             if request.images:
                 # Build multimodal content with text and images

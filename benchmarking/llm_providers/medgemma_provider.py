@@ -37,7 +37,7 @@ class MedGemmaProvider(LLMProvider):
                 - max_new_tokens: Maximum tokens to generate (default: 300)
         """
         # Extract MedGemma-specific config before calling super().__init__
-        self.api_url = kwargs.pop('api_url', None) or os.getenv('MEDGEMMA_API_URL', 'http://localhost:8002')
+        self.api_url = os.getenv('MEDGEMMA_API_URL', 'http://localhost:8002')
         self.max_new_tokens = kwargs.pop('max_new_tokens', 300)
         self.client = None
         
@@ -124,7 +124,7 @@ class MedGemmaProvider(LLMProvider):
             
             # Prepare form data
             # Use system_prompt if provided, otherwise use default
-            system_prompt_text = self.system_prompt if self.system_prompt else "You are an expert radiologist."
+            system_prompt_text = self.system_prompt if self.system_prompt else "You are an expert radiologist who is able to analyze radiological images at any resolution."
             
             # Override max_new_tokens if provided in request
             max_tokens = getattr(request, 'max_tokens', self.max_new_tokens)

@@ -31,7 +31,7 @@ class VQAInput(BaseModel):
     """
     prompt: str = Field(..., description="Question or instruction about the medical images")
     system_prompt: Optional[str] = Field(
-        "You are an expert radiologist.",
+        "You are an expert radiologist who is able to analyze radiological images at any resolution.",
         description="System prompt to set the context for the model",
     )
     max_new_tokens: int = Field(
@@ -335,7 +335,7 @@ async def startup_event():
 async def analyze_images(
     images: List[UploadFile] = File(..., description="List of medical image files to analyze (JPG or PNG)."),
     prompt: str = Form(..., description="Question or instruction about the medical images."),
-    system_prompt: Optional[str] = Form("You are an expert radiologist.", description="System prompt to set the context for the model."),
+    system_prompt: Optional[str] = Form("You are an expert radiologist who is able to analyze radiological images at any resolution.", description="System prompt to set the context for the model."),
     max_new_tokens: int = Form(100, description="Maximum number of tokens to generate in the response.")
 ):
     """Analyze medical images using MedGemma AI model.
