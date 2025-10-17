@@ -184,18 +184,19 @@ class ChatInterface:
                                 pending_call = self.pending_tool_calls.pop(tool_call_id)
                                 tool_name = pending_call["name"]
                                 tool_args = pending_call["args"]
-
                                 # Parse content
                                 try:
-                                    # Try eval first for Python tuples
-                                    content_tuple = eval(msg.content)
-                                    result = content_tuple[0]
+                                    # Try JSON parsing first
+                                    result = json.loads(msg.content)
                                     tool_output_str = json.dumps(result, indent=2)
-                                except (ValueError, NameError):
+                                except json.JSONDecodeError:
                                     try:
-                                        result = json.loads(msg.content)
+                                        # Use ast.literal_eval as safe fallback for Python literals
+                                        content_tuple = ast.literal_eval(msg.content)
+                                        result = content_tuple[0]
                                         tool_output_str = json.dumps(result, indent=2)
-                                    except json.JSONDecodeError:
+                                    except (ValueError, SyntaxError):
+                                        # Fall back to treating as plain string
                                         result = msg.content
                                         tool_output_str = str(msg.content)
 
