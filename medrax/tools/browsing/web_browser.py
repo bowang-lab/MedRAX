@@ -78,9 +78,7 @@ class WebBrowserTool(BaseTool):
     max_results: int = 5
     args_schema: Type[BaseModel] = WebBrowserSchema
 
-    def __init__(
-        self, search_api_key: Optional[str] = None, search_engine_id: Optional[str] = None, **kwargs
-    ):
+    def __init__(self, search_api_key: Optional[str] = None, search_engine_id: Optional[str] = None, **kwargs):
         """Initialize the web browser tool with optional search API credentials.
 
         Args:
@@ -145,9 +143,7 @@ class WebBrowserTool(BaseTool):
         except Exception as e:
             return {"error": f"Search failed: {str(e)}"}
 
-    def visit_url(
-        self, url: str, max_content_length: int = 5000, max_links: int = 5
-    ) -> Dict[str, Any]:
+    def visit_url(self, url: str, max_content_length: int = 5000, max_links: int = 5) -> Dict[str, Any]:
         """Visit a URL and extract its content with comprehensive parsing.
 
         Args:
@@ -218,9 +214,7 @@ class WebBrowserTool(BaseTool):
             return {
                 "title": title,
                 "content": (
-                    text_content[:max_content_length]
-                    if len(text_content) > max_content_length
-                    else text_content
+                    text_content[:max_content_length] if len(text_content) > max_content_length else text_content
                 ),
                 "url": url,
                 "links": links[:max_links],  # Limit to max_links

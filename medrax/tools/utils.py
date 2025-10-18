@@ -16,18 +16,10 @@ class ImageVisualizerInput(BaseModel):
 
     image_path: str = Field(..., description="Path to the image file to display, only supports JPG or PNG images")
     title: Optional[str] = Field(None, description="Optional title to display above the image")
-    description: Optional[str] = Field(
-        None, description="Optional description to display below the image"
-    )
-    width: Optional[int] = Field(
-        10, description="Optional figure width in inches"
-    )
-    height: Optional[int] = Field(
-        10, description="Optional figure height in inches"
-    )
-    cmap: Optional[str] = Field(
-        "rgb", description="Optional colormap to use for displaying the image"
-    )
+    description: Optional[str] = Field(None, description="Optional description to display below the image")
+    width: Optional[int] = Field(10, description="Optional figure width in inches")
+    height: Optional[int] = Field(10, description="Optional figure height in inches")
+    cmap: Optional[str] = Field("rgb", description="Optional colormap to use for displaying the image")
 
 
 class ImageVisualizerTool(BaseTool):
@@ -65,9 +57,7 @@ class ImageVisualizerTool(BaseTool):
 
         # Add description if provided
         if description:
-            plt.figtext(
-                0.5, 0.01, description, wrap=True, horizontalalignment="center", fontsize=10
-            )
+            plt.figtext(0.5, 0.01, description, wrap=True, horizontalalignment="center", fontsize=10)
 
         # Adjust margins to minimize whitespace while preventing overlap
         plt.subplots_adjust(top=0.95, bottom=0.05, left=0.05, right=0.95)

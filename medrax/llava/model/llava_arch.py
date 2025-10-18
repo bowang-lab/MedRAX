@@ -104,9 +104,7 @@ class LlavaMetaModel:
             checkpoint_folder = os.path.dirname(pretrain_mm_mlp_adapter)
             ckpts = glob(f"{checkpoint_folder}/checkpoint-*", recursive=False)
             if len(ckpts) > 0:
-                vision_module_weights = torch.load(
-                    f"{ckpts[-1]}/mm_projector.bin", map_location="cpu"
-                )
+                vision_module_weights = torch.load(f"{ckpts[-1]}/mm_projector.bin", map_location="cpu")
                 model_dict = get_w(vision_module_weights, "vision_tower")
                 print(f"Loading vision module weights from {ckpts[-1]}/mm_projector.bin")
                 # print keys in model_dict
@@ -170,9 +168,7 @@ class LlavaMetaForCausalLM(ABC):
             image_features = self.encode_images(images).to(self.device)
 
         # TODO: image start / end is not implemented here to support pretraining.
-        if getattr(self.config, "tune_mm_mlp_adapter", False) and getattr(
-            self.config, "mm_use_im_start_end", False
-        ):
+        if getattr(self.config, "tune_mm_mlp_adapter", False) and getattr(self.config, "mm_use_im_start_end", False):
             raise NotImplementedError
 
         # Let's just add dummy tensors if they do not exist,
@@ -188,21 +184,15 @@ class LlavaMetaForCausalLM(ABC):
         else:
             attention_mask = attention_mask.bool()
         if position_ids is None:
-            position_ids = torch.arange(
-                0, input_ids.shape[1], dtype=torch.long, device=input_ids.device
-            )
+            position_ids = torch.arange(0, input_ids.shape[1], dtype=torch.long, device=input_ids.device)
 
         if labels is None:
             labels = torch.full_like(input_ids, IGNORE_INDEX)
 
         input_ids = [
-            cur_input_ids[cur_attention_mask]
-            for cur_input_ids, cur_attention_mask in zip(input_ids, attention_mask)
+            cur_input_ids[cur_attention_mask] for cur_input_ids, cur_attention_mask in zip(input_ids, attention_mask)
         ]
-        labels = [
-            cur_labels[cur_attention_mask]
-            for cur_labels, cur_attention_mask in zip(labels, attention_mask)
-        ]
+        labels = [cur_labels[cur_attention_mask] for cur_labels, cur_attention_mask in zip(labels, attention_mask)]
 
         new_input_embeds = []
         new_labels = []
@@ -219,20 +209,14 @@ class LlavaMetaForCausalLM(ABC):
                 continue
 
             image_token_indices = (
-                [-1]
-                + torch.where(cur_input_ids == IMAGE_TOKEN_INDEX)[0].tolist()
-                + [cur_input_ids.shape[0]]
+                [-1] + torch.where(cur_input_ids == IMAGE_TOKEN_INDEX)[0].tolist() + [cur_input_ids.shape[0]]
             )
             cur_input_ids_noim = []
             cur_labels = labels[batch_idx]
             cur_labels_noim = []
             for i in range(len(image_token_indices) - 1):
-                cur_input_ids_noim.append(
-                    cur_input_ids[image_token_indices[i] + 1 : image_token_indices[i + 1]]
-                )
-                cur_labels_noim.append(
-                    cur_labels[image_token_indices[i] + 1 : image_token_indices[i + 1]]
-                )
+                cur_input_ids_noim.append(cur_input_ids[image_token_indices[i] + 1 : image_token_indices[i + 1]])
+                cur_labels_noim.append(cur_labels[image_token_indices[i] + 1 : image_token_indices[i + 1]])
 
             split_sizes = [x.shape[0] for x in cur_labels_noim]
             cur_input_embeds = self.get_model().embed_tokens(torch.cat(cur_input_ids_noim))
@@ -279,12 +263,8 @@ class LlavaMetaForCausalLM(ABC):
             dtype=new_labels[0].dtype,
             device=new_labels[0].device,
         )
-        attention_mask = torch.zeros(
-            (batch_size, max_len), dtype=attention_mask.dtype, device=attention_mask.device
-        )
-        position_ids = torch.zeros(
-            (batch_size, max_len), dtype=position_ids.dtype, device=position_ids.device
-        )
+        attention_mask = torch.zeros((batch_size, max_len), dtype=attention_mask.dtype, device=attention_mask.device)
+        position_ids = torch.zeros((batch_size, max_len), dtype=position_ids.dtype, device=position_ids.device)
 
         for i, (cur_new_embed, cur_new_labels) in enumerate(zip(new_input_embeds, new_labels)):
             cur_len = cur_new_embed.shape[0]
@@ -351,9 +331,7 @@ class LlavaMetaForCausalLM(ABC):
             self.resize_token_embeddings(len(tokenizer))
 
         if model_args.mm_use_im_start_end:
-            num_new_tokens = tokenizer.add_tokens(
-                [DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN], special_tokens=True
-            )
+            num_new_tokens = tokenizer.add_tokens([DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN], special_tokens=True)
             self.resize_token_embeddings(len(tokenizer))
 
             if num_new_tokens > 0:
@@ -361,9 +339,7 @@ class LlavaMetaForCausalLM(ABC):
                 output_embeddings = self.get_output_embeddings().weight.data
 
                 input_embeddings_avg = input_embeddings[:-num_new_tokens].mean(dim=0, keepdim=True)
-                output_embeddings_avg = output_embeddings[:-num_new_tokens].mean(
-                    dim=0, keepdim=True
-                )
+                output_embeddings_avg = output_embeddings[:-num_new_tokens].mean(dim=0, keepdim=True)
 
                 input_embeddings[-num_new_tokens:] = input_embeddings_avg
                 output_embeddings[-num_new_tokens:] = output_embeddings_avg
@@ -375,9 +351,7 @@ class LlavaMetaForCausalLM(ABC):
                     p.requires_grad = False
 
             if model_args.pretrain_mm_mlp_adapter:
-                mm_projector_weights = torch.load(
-                    model_args.pretrain_mm_mlp_adapter, map_location="cpu"
-                )
+                mm_projector_weights = torch.load(model_args.pretrain_mm_mlp_adapter, map_location="cpu")
                 embed_tokens_weight = mm_projector_weights["model.embed_tokens.weight"]
                 assert num_new_tokens == 2
                 if input_embeddings.shape == embed_tokens_weight.shape:

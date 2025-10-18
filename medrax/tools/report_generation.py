@@ -23,9 +23,7 @@ from transformers import (
 class ChestXRayInput(BaseModel):
     """Input for chest X-ray analysis tools. Only supports JPG or PNG images."""
 
-    image_path: str = Field(
-        ..., description="Path to the radiology image file, only supports JPG or PNG images"
-    )
+    image_path: str = Field(..., description="Path to the radiology image file, only supports JPG or PNG images")
 
 
 class ChestXRayReportGeneratorTool(BaseTool):
@@ -180,12 +178,8 @@ class ChestXRayReportGeneratorTool(BaseTool):
         """
         try:
             # Process image for both models
-            findings_pixels = self._process_image(
-                image_path, self.findings_processor, self.findings_model
-            )
-            impression_pixels = self._process_image(
-                image_path, self.impression_processor, self.impression_model
-            )
+            findings_pixels = self._process_image(image_path, self.findings_processor, self.findings_model)
+            impression_pixels = self._process_image(image_path, self.impression_processor, self.impression_model)
 
             # Generate both sections
             with torch.inference_mode():
@@ -197,11 +191,7 @@ class ChestXRayReportGeneratorTool(BaseTool):
                 )
 
             # Combine into formatted report
-            report = (
-                "CHEST X-RAY REPORT\n\n"
-                f"FINDINGS:\n{findings_text}\n\n"
-                f"IMPRESSION:\n{impression_text}"
-            )
+            report = "CHEST X-RAY REPORT\n\n" f"FINDINGS:\n{findings_text}\n\n" f"IMPRESSION:\n{impression_text}"
 
             output = {
                 "report": report,

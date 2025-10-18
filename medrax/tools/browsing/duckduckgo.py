@@ -95,18 +95,12 @@ class DuckDuckGoSearchTool(BaseTool):
         super().__init__(**kwargs)
 
         if DDGS is None:
-            logger.error(
-                "duckduckgo-search package not installed. Install with: pip install duckduckgo-search"
-            )
-            raise ImportError(
-                "duckduckgo-search package is required for web search functionality"
-            )
+            logger.error("duckduckgo-search package not installed. Install with: pip install duckduckgo-search")
+            raise ImportError("duckduckgo-search package is required for web search functionality")
 
         logger.info("DuckDuckGo search tool initialized successfully")
 
-    def _perform_search_sync(
-        self, query: str, max_results: int = 5, region: str = "us-en"
-    ) -> Dict[str, Any]:
+    def _perform_search_sync(self, query: str, max_results: int = 5, region: str = "us-en") -> Dict[str, Any]:
         """
         Perform the actual web search using DuckDuckGo synchronously.
 
@@ -118,9 +112,7 @@ class DuckDuckGoSearchTool(BaseTool):
         Returns:
             Dict[str, Any]: Structured search results.
         """
-        logger.info(
-            f"Performing web search: '{query}' (max_results={max_results}, region={region})"
-        )
+        logger.info(f"Performing web search: '{query}' (max_results={max_results}, region={region})")
 
         try:
             # Initialize DDGS with error handling
@@ -158,9 +150,7 @@ class DuckDuckGoSearchTool(BaseTool):
                     summary = f"No results found for '{query}'"
 
                 # Log successful completion
-                logger.info(
-                    f"Web search completed successfully: {len(formatted_results)} results"
-                )
+                logger.info(f"Web search completed successfully: {len(formatted_results)} results")
 
                 return {
                     "query": query,
@@ -217,7 +207,7 @@ class DuckDuckGoSearchTool(BaseTool):
 
         try:
             result = self._perform_search_sync(query, max_results, region)
-            
+
             # Check if search was successful
             if "error" in result:
                 metadata["analysis_status"] = "failed"
@@ -239,7 +229,7 @@ class DuckDuckGoSearchTool(BaseTool):
             }
             metadata["analysis_status"] = "failed"
             metadata["error_details"] = str(e)
-            
+
             return error_result, metadata
 
     async def _arun(
@@ -296,9 +286,7 @@ class DuckDuckGoSearchTool(BaseTool):
 
             # Use asyncio to run sync search in executor
             loop = asyncio.get_event_loop()
-            result, metadata = await loop.run_in_executor(
-                None, self._run, query, max_results, region
-            )
+            result, metadata = await loop.run_in_executor(None, self._run, query, max_results, region)
 
             if writer:
                 # Parse result to get count for progress update
@@ -333,7 +321,7 @@ class DuckDuckGoSearchTool(BaseTool):
                 "search_engine": "DuckDuckGo",
                 "timestamp": datetime.now().isoformat(),
             }
-            
+
             metadata = {
                 "query": query,
                 "max_results": max_results,
@@ -344,12 +332,10 @@ class DuckDuckGoSearchTool(BaseTool):
                 "analysis_status": "failed",
                 "error_details": str(e),
             }
-            
+
             return error_result, metadata
 
-    def get_search_summary(
-        self, query: str, max_results: int = 3
-    ) -> dict[str, str | list[str]]:
+    def get_search_summary(self, query: str, max_results: int = 3) -> dict[str, str | list[str]]:
         """
         Get a quick summary of search results for a given query.
 
@@ -375,14 +361,7 @@ class DuckDuckGoSearchTool(BaseTool):
             results = result.get("results", [])
             titles = [r["title"] for r in results]
             urls = [r["url"] for r in results]
-            snippets = [
-                (
-                    r["snippet"][:100] + "..."
-                    if len(r["snippet"]) > 100
-                    else r["snippet"]
-                )
-                for r in results
-            ]
+            snippets = [(r["snippet"][:100] + "..." if len(r["snippet"]) > 100 else r["snippet"]) for r in results]
 
             return {
                 "query": query,

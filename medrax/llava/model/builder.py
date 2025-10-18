@@ -59,9 +59,7 @@ def load_pretrained_model(
             # PEFT model
             from peft import PeftModel
 
-            tokenizer = AutoTokenizer.from_pretrained(
-                model_base, use_fast=False, cache_dir=cache_dir
-            )
+            tokenizer = AutoTokenizer.from_pretrained(model_base, use_fast=False, cache_dir=cache_dir)
             model = AutoModelForCausalLM.from_pretrained(
                 model_base,
                 low_cpu_mem_usage=True,
@@ -78,9 +76,7 @@ def load_pretrained_model(
         else:
             use_fast = False
             if "mpt" in model_name.lower():
-                tokenizer = AutoTokenizer.from_pretrained(
-                    model_path, use_fast=True, cache_dir=cache_dir
-                )
+                tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True, cache_dir=cache_dir)
                 model = AutoModelForCausalLM.from_pretrained(
                     model_path,
                     low_cpu_mem_usage=True,
@@ -90,9 +86,7 @@ def load_pretrained_model(
                     **kwargs,
                 )
             else:
-                tokenizer = AutoTokenizer.from_pretrained(
-                    model_path, use_fast=False, cache_dir=cache_dir
-                )
+                tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False, cache_dir=cache_dir)
                 model = AutoModelForCausalLM.from_pretrained(
                     model_path,
                     low_cpu_mem_usage=True,
@@ -109,9 +103,7 @@ def load_pretrained_model(
         if mm_use_im_patch_token:
             tokenizer.add_tokens([DEFAULT_IMAGE_PATCH_TOKEN], special_tokens=True)
         if mm_use_im_start_end:
-            tokenizer.add_tokens(
-                [DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN], special_tokens=True
-            )
+            tokenizer.add_tokens([DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN], special_tokens=True)
         model.resize_token_embeddings(len(tokenizer))
 
         vision_tower = model.get_vision_tower()
