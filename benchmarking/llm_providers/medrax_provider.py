@@ -39,7 +39,7 @@ class MedRAXProvider(LLMProvider):
                 "TorchXRayVisionClassifierTool",  # For classifying chest X-ray images using TorchXRayVision
                 "ArcPlusClassifierTool",  # For advanced chest X-ray classification using ArcPlus
                 "ChestXRayReportGeneratorTool",  # For generating medical reports from X-rays
-                "XRayPhraseGroundingTool",  # For locating described features in X-rays
+                # "XRayPhraseGroundingTool",  # For locating described features in X-rays
                 "MedGemmaVQATool", # Google MedGemma VQA tool
                 "MedicalRAGTool",  # For retrieval-augmented generation with medical knowledge
                 "WebBrowserTool",  # For web browsing and search capabilities
