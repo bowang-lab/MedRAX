@@ -13,7 +13,7 @@ license = {file = "LICENSE"}
 requires-python = ">=3.10"
 dependencies = [
     "requests>=2.25.0",
-    "numpy>=1.19.0",
+    "numpy<2",
     "langchain-core>=0.1.0",
     "langchain-community>=0.0.10",
     "langchain-openai>=0.0.2",
