@@ -205,7 +205,10 @@ class ChestAgentBenchProcessor:
     def process_task_data(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         samples, skipped = [], defaultdict(int)
         for row in rows:
-            image_paths = [os.path.join(self.data_dir, p) for p in (row.get("images") or [])]
+            image_paths = [
+                os.path.normpath(os.path.join(self.data_dir, p))
+                for p in (row.get("images") or [])
+            ]
             if not image_paths:
                 skipped["no_images"] += 1
                 continue

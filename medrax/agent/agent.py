@@ -3,6 +3,7 @@ import operator
 from pathlib import Path
 from dotenv import load_dotenv
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict, Any, TypedDict, Annotated, Optional
 
 from langgraph.graph import StateGraph, END
@@ -68,6 +69,8 @@ class Agent:
         system_prompt: str = "",
         log_tools: bool = True,
         log_dir: Optional[str] = "logs",
+        parallel_tools: bool = True,
+        max_tool_workers: int = 4,
     ):
         """
         Initialize the Agent.
@@ -79,9 +82,13 @@ class Agent:
             system_prompt (str, optional): System instructions. Defaults to "".
             log_tools (bool, optional): Whether to log tool calls. Defaults to True.
             log_dir (str, optional): Directory to save logs. Defaults to 'logs'.
+            parallel_tools (bool, optional): Whether to execute independent tool calls in parallel. Defaults to True.
+            max_tool_workers (int, optional): Max worker threads for tool calls. Defaults to 4.
         """
         self.system_prompt = system_prompt
         self.log_tools = log_tools
+        self.parallel_tools = parallel_tools
+        self.max_tool_workers = max(1, max_tool_workers)
 
         if self.log_tools:
             self.log_path = Path(log_dir or "logs")
@@ -130,9 +137,33 @@ class Agent:
         response = state["messages"][-1]
         return len(response.tool_calls) > 0
 
+    def _execute_single_tool(self, call: Dict[str, Any]) -> ToolMessage:
+        """Execute a single tool call with error guarding."""
+        tool_name = call.get("name", "")
+        call_id = call.get("id", "")
+        args = call.get("args", {})
+        print(f"Executing tool: {call}")
+
+        if tool_name not in self.tools:
+            print("\n....invalid tool....")
+            result = "invalid tool, please retry"
+        else:
+            try:
+                result = self.tools[tool_name].invoke(args)
+            except Exception as e:
+                result = f"Error executing tool {tool_name}: {str(e)}"
+
+        return ToolMessage(
+            tool_call_id=call_id,
+            name=tool_name,
+            args=args,
+            content=str(result),
+        )
+
     def execute_tools(self, state: AgentState) -> Dict[str, List[ToolMessage]]:
         """
         Execute tool calls from the model's response.
+        Supports both concurrent and sequential tool invocation.
 
         Args:
             state (AgentState): The current state of the agent.
@@ -141,24 +172,17 @@ class Agent:
             Dict[str, List[ToolMessage]]: A dictionary containing tool execution results.
         """
         tool_calls = state["messages"][-1].tool_calls
-        results = []
+        if not tool_calls:
+            return {"messages": []}
 
-        for call in tool_calls:
-            print(f"Executing tool: {call}")
-            if call["name"] not in self.tools:
-                print("\n....invalid tool....")
-                result = "invalid tool, please retry"
-            else:
-                result = self.tools[call["name"]].invoke(call["args"])
-
-            results.append(
-                ToolMessage(
-                    tool_call_id=call["id"],
-                    name=call["name"],
-                    args=call["args"],
-                    content=str(result),
-                )
-            )
+        # If single tool call or parallel execution disabled, run sequentially
+        if len(tool_calls) == 1 or not self.parallel_tools:
+            results = [self._execute_single_tool(call) for call in tool_calls]
+        else:
+            # Parallel execution across available workers
+            workers = min(len(tool_calls), self.max_tool_workers)
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                results = list(executor.map(self._execute_single_tool, tool_calls))
 
         self._save_tool_calls(results)
         print("Returning to model processing!")
@@ -189,5 +213,5 @@ class Agent:
             }
             logs.append(log_entry)
 
-        with open(filename, "w") as f:
-            json.dump(logs, f, indent=4)
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(logs, f, indent=4, default=str)

@@ -1,4 +1,6 @@
 import re
+import ast
+import json
 import base64
 import gradio as gr
 from pathlib import Path
@@ -146,7 +148,23 @@ class ChatInterface:
                     elif "execute" in event:
                         for message in event["execute"]["messages"]:
                             tool_name = message.name
-                            tool_result = eval(message.content)[0]
+                            try:
+                                parsed = ast.literal_eval(message.content)
+                                tool_result = (
+                                    parsed[0]
+                                    if isinstance(parsed, (list, tuple)) and len(parsed) > 0
+                                    else parsed
+                                )
+                            except Exception:
+                                try:
+                                    parsed = json.loads(message.content)
+                                    tool_result = (
+                                        parsed[0]
+                                        if isinstance(parsed, (list, tuple)) and len(parsed) > 0
+                                        else parsed
+                                    )
+                                except Exception:
+                                    tool_result = message.content
 
                             if tool_result:
                                 metadata = {"title": f"🖼️ Image from tool: {tool_name}"}
