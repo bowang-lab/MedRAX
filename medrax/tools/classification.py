@@ -12,6 +12,8 @@ from langchain_core.callbacks import (
 )
 from langchain_core.tools import BaseTool
 
+from .intensity import xrv_maxval
+
 
 class ChestXRayInput(BaseModel):
     """Input for chest X-ray analysis tools. Only supports JPG or PNG images."""
@@ -48,10 +50,24 @@ class ChestXRayClassifierTool(BaseTool):
     args_schema: Type[BaseModel] = ChestXRayInput
     model: xrv.models.DenseNet = None
     device: Optional[str] = "cuda"
+    input_maxval: Optional[float] = None
     transform: torchvision.transforms.Compose = None
 
-    def __init__(self, model_name: str = "densenet121-res224-all", device: Optional[str] = "cuda"):
+    def __init__(
+        self,
+        model_name: str = "densenet121-res224-all",
+        device: Optional[str] = "cuda",
+        input_maxval: Optional[float] = None,
+    ):
+        """
+        Args:
+            model_name: TorchXRayVision DenseNet weights to load.
+            device: Device to run the model on.
+            input_maxval: Largest possible pixel value of the input images, e.g. 4095 for
+                12-bit or 65535 for 16-bit images. Not needed for 8-bit images.
+        """
         super().__init__()
+        self.input_maxval = input_maxval
         self.model = xrv.models.DenseNet(weights=model_name)
         self.model.eval()
         self.device = torch.device(device) if device else "cuda"
@@ -76,10 +92,11 @@ class ChestXRayClassifierTool(BaseTool):
             ValueError: If the image cannot be properly loaded or processed.
         """
         img = skimage.io.imread(image_path)
-        img = xrv.datasets.normalize(img, 255)
 
         if len(img.shape) > 2:
             img = img[:, :, 0]
+
+        img = xrv.datasets.normalize(img, xrv_maxval(img, self.input_maxval))
 
         img = img[None, :, :]
         img = self.transform(img)

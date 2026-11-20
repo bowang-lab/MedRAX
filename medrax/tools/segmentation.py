@@ -20,6 +20,8 @@ from langchain_core.callbacks import (
 )
 from langchain_core.tools import BaseTool
 
+from .intensity import xrv_maxval
+
 
 class ChestXRaySegmentationInput(BaseModel):
     """Input schema for the Chest X-ray Segmentation Tool."""
@@ -81,10 +83,24 @@ class ChestXRaySegmentationTool(BaseTool):
     pixel_spacing_mm: float = 0.2
     temp_dir: Path = Path("temp")
     organ_map: Dict[str, int] = None
+    input_maxval: Optional[float] = None
 
-    def __init__(self, device: Optional[str] = "cuda", temp_dir: Optional[Path] = Path("temp")):
-        """Initialize the segmentation tool with model and temporary directory."""
+    def __init__(
+        self,
+        device: Optional[str] = "cuda",
+        temp_dir: Optional[Path] = Path("temp"),
+        input_maxval: Optional[float] = None,
+    ):
+        """Initialize the segmentation tool with model and temporary directory.
+
+        Args:
+            device: Device to run the model on.
+            temp_dir: Directory for saved visualizations.
+            input_maxval: Largest possible pixel value of the input images, e.g. 4095 for
+                12-bit or 65535 for 16-bit images. Not needed for 8-bit images.
+        """
         super().__init__()
+        self.input_maxval = input_maxval
         self.model = xrv.baseline_models.chestx_det.PSPNet()
         self.device = torch.device(device) if device else "cuda"
         self.model = self.model.to(self.device)
@@ -246,7 +262,7 @@ class ChestXRaySegmentationTool(BaseTool):
             if len(original_img.shape) > 2:
                 original_img = original_img[:, :, 0]
 
-            img = xrv.datasets.normalize(original_img, 255)
+            img = xrv.datasets.normalize(original_img, xrv_maxval(original_img, self.input_maxval))
             img = img[None, ...]
             img = self.transform(img)
             img = torch.from_numpy(img)
