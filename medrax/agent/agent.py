@@ -1,4 +1,5 @@
 import json
+import traceback
 import operator
 from pathlib import Path
 from dotenv import load_dotenv
@@ -147,9 +148,27 @@ class Agent:
             print(f"Executing tool: {call}")
             if call["name"] not in self.tools:
                 print("\n....invalid tool....")
-                result = "invalid tool, please retry"
+                result = (
+                    {
+                        "error": f"Unknown tool: {call['name']}. Please retry with an available tool."
+                    },
+                    {"tool_call_status": "failed"},
+                )
             else:
-                result = self.tools[call["name"]].invoke(call["args"])
+                try:
+                    result = self.tools[call["name"]].invoke(call["args"])
+                except Exception as e:  # noqa: BLE001 - any tool error goes back to the model
+                    # Policy: a failing tool call must not end the run. The tools already
+                    # catch their own errors in _run, so what reaches this point is mostly
+                    # argument validation (raised by LangChain before _run). Anything else
+                    # is still returned to the model, but its traceback is printed so a
+                    # programming error in a tool stays visible to developers.
+                    traceback.print_exc()
+                    # Keep the (output, metadata) shape the tools use; interface.py expects it.
+                    result = (
+                        {"error": f"{type(e).__name__}: {e}"},
+                        {"tool_call_status": "failed"},
+                    )
 
             results.append(
                 ToolMessage(
